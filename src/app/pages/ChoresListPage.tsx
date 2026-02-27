@@ -9,13 +9,13 @@ import type { ChoreSchedule } from '../types';
 import { STATUS_COLORS } from '../types';
 import { toast } from 'sonner';
 import CreateScheduleModal from '../components/CreateScheduleModal';
+import { MOCK_CHORE_SCHEDULE } from '../data/mock-kenya';
 
 export default function ChoresListPage() {
   const navigate = useNavigate();
   const [schedules, setSchedules] = useState<ChoreSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     loadSchedules();
@@ -23,25 +23,19 @@ export default function ChoresListPage() {
 
   async function loadSchedules() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      
-      setAccessToken(session.access_token);
-      const data = await api.getChoreSchedules(session.access_token);
-      setSchedules(data);
+      const data = await api.getChoreSchedules();
+      setSchedules(data && data.length > 0 ? data : [MOCK_CHORE_SCHEDULE]);
     } catch (error) {
-      console.error('Failed to load chore schedules:', error);
-      toast.error('Failed to load chore schedules');
+      console.error('Failed to load chore schedules, using mock data:', error);
+      setSchedules([MOCK_CHORE_SCHEDULE]);
     } finally {
       setLoading(false);
     }
   }
 
   async function handleCreateSchedule(title: string, weekStart: string, weekEnd: string) {
-    if (!accessToken) return;
-
     try {
-      const newSchedule = await api.createChoreSchedule(accessToken, {
+      const newSchedule = await api.createChoreSchedule({
         title,
         weekStart,
         weekEnd,

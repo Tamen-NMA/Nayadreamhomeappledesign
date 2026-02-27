@@ -1,102 +1,98 @@
 import { useState } from 'react';
-import { COUNTRIES, type Country } from '../types';
+import { X, Check } from 'lucide-react';
 import { Button } from './ui/button';
-import { api } from '../utils/api';
-import { toast } from 'sonner';
+import { COUNTRIES, type CountryCode } from '../data/countries';
 
 interface CountrySetupModalProps {
-  accessToken: string;
-  onComplete: () => void;
-  onSkip: () => void;
+  isOpen: boolean;
+  onClose: () => void;
+  onSelectCountry: (countryCode: CountryCode) => void;
 }
 
-export default function CountrySetupModal({ accessToken, onComplete, onSkip }: CountrySetupModalProps) {
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
-  const [loading, setLoading] = useState(false);
+export default function CountrySetupModal({ isOpen, onClose, onSelectCountry }: CountrySetupModalProps) {
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode | null>(null);
 
-  async function handleApplyDefaults() {
-    if (!selectedCountry) {
-      toast.error('Please select a country');
-      return;
-    }
+  if (!isOpen) return null;
 
-    setLoading(true);
-    try {
-      console.log('[CountrySetup] Access Token:', accessToken);
-      console.log('[CountrySetup] Selected Country:', selectedCountry);
-      
-      // Check if in test mode
-      if (accessToken === 'test-mode-token') {
-        console.log('[CountrySetup] Running in TEST MODE - storing locally');
-        // In test mode, just store locally without API call
-        localStorage.setItem('naya_user_country', selectedCountry);
-        toast.success('Country defaults applied!');
-        onComplete();
-      } else {
-        console.log('[CountrySetup] Running in NORMAL MODE - calling API');
-        // Normal mode - call API
-        await api.setCountry(accessToken, selectedCountry);
-        toast.success('Country defaults applied!');
-        onComplete();
-      }
-    } catch (error: any) {
-      console.error('[CountrySetup] Failed to set country:', error);
-      toast.error('Failed to apply defaults');
-    } finally {
-      setLoading(false);
+  const handleContinue = () => {
+    if (selectedCountry) {
+      onSelectCountry(selectedCountry);
+      onClose();
     }
-  }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-t-[28px] md:rounded-[28px] w-full max-w-md p-6 animate-slide-up">
-        <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6 md:hidden" />
-        
-        <h2 className="text-2xl font-bold text-[#2F2F2F] mb-2">
-          Set Up Your Home
-        </h2>
-        <p className="text-[#6F6F6F] mb-6">
-          Select your country to pre-populate meals and chores with local defaults
-        </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-[28px] w-full max-w-md shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="p-6 pb-4">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold text-[#2F2F2F] mb-2">
+                Welcome to Naya Dream Home
+              </h2>
+              <p className="text-sm text-[#6F6F6F] leading-relaxed">
+                Select your country to get started with local meal plans and chore schedules
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors ml-2"
+            >
+              <X className="w-5 h-5 text-[#6F6F6F]" />
+            </button>
+          </div>
+        </div>
 
-        <div className="space-y-3 mb-6">
+        {/* Country Cards */}
+        <div className="px-6 pb-6 space-y-3">
           {COUNTRIES.map((country) => (
             <button
               key={country.id}
               onClick={() => setSelectedCountry(country.id)}
-              className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all ${
+              className={`w-full p-4 rounded-2xl border-2 transition-all ${
                 selectedCountry === country.id
-                  ? 'border-[#F26B5E] bg-[#FFF5F4]'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-[#F26B5E] bg-[#F26B5E]/5'
+                  : 'border-gray-200 hover:border-[#F26B5E]/30'
               }`}
             >
-              <span className="text-4xl">{country.flag}</span>
-              <span className="text-lg font-semibold text-[#2F2F2F]">
-                {country.name}
-              </span>
-              {selectedCountry === country.id && (
-                <div className="ml-auto w-6 h-6 bg-[#F26B5E] rounded-full flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                  </svg>
+              <div className="flex items-center gap-4">
+                {/* Flag */}
+                <div className="text-4xl">{country.flag}</div>
+
+                {/* Country Info */}
+                <div className="flex-1 text-left">
+                  <h3 className="text-lg font-semibold text-[#2F2F2F]">
+                    {country.name}
+                  </h3>
+                  <p className="text-sm text-[#6F6F6F]">
+                    {country.currency} • Weekly Budget: {country.weeklyBudget.toLocaleString()}
+                  </p>
                 </div>
-              )}
+
+                {/* Checkmark */}
+                {selectedCountry === country.id && (
+                  <div className="w-6 h-6 rounded-full bg-[#F26B5E] flex items-center justify-center">
+                    <Check className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </div>
             </button>
           ))}
         </div>
 
-        <div className="space-y-3">
+        {/* Actions */}
+        <div className="px-6 pb-6 space-y-3">
           <Button
-            onClick={handleApplyDefaults}
-            disabled={!selectedCountry || loading}
-            className="w-full bg-[#F26B5E] hover:bg-[#e05a4e] text-white rounded-2xl h-12 font-semibold"
+            onClick={handleContinue}
+            disabled={!selectedCountry}
+            className="w-full h-12 bg-[#5FB3A6] hover:bg-[#4fa396] text-white rounded-2xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Applying...' : 'Apply Defaults'}
+            Continue
           </Button>
-          
           <button
-            onClick={onSkip}
-            className="w-full text-center text-[#6F6F6F] hover:text-[#F26B5E] transition-colors py-2"
+            onClick={onClose}
+            className="w-full text-sm text-[#6F6F6F] hover:text-[#F26B5E] transition-colors font-medium"
           >
             Skip for now
           </button>

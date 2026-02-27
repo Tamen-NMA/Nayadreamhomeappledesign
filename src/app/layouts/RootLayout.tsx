@@ -2,6 +2,7 @@ import { Outlet, useNavigate, useLocation, Navigate } from 'react-router';
 import { Home, CheckCircle, Utensils, ShoppingCart, MoreHorizontal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabase';
+import { api } from '../utils/api';
 import CountrySetupModal from '../components/CountrySetupModal';
 
 export default function RootLayout() {
@@ -9,7 +10,6 @@ export default function RootLayout() {
   const location = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [showCountrySetup, setShowCountrySetup] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -20,7 +20,6 @@ export default function RootLayout() {
     const testMode = localStorage.getItem('testMode');
     if (testMode === 'true') {
       setIsAuthenticated(true);
-      setAccessToken('test-mode-token');
       
       // Check if user needs country setup (first time)
       const country = localStorage.getItem('naya_country_set');
@@ -30,11 +29,11 @@ export default function RootLayout() {
       return;
     }
 
+    // Check if there's a valid session
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.access_token) {
       setIsAuthenticated(true);
-      setAccessToken(session.access_token);
       
       // Check if user needs country setup (first time)
       const country = localStorage.getItem('naya_country_set');
@@ -157,16 +156,30 @@ export default function RootLayout() {
       `}</style>
 
       {/* Country Setup Modal */}
-      {showCountrySetup && accessToken && (
+      {showCountrySetup && (
         <CountrySetupModal
-          accessToken={accessToken}
-          onComplete={() => {
+          isOpen={showCountrySetup}
+          onClose={() => {
             setShowCountrySetup(false);
             localStorage.setItem('naya_country_set', 'true');
           }}
-          onSkip={() => {
-            setShowCountrySetup(false);
-            localStorage.setItem('naya_country_set', 'true');
+          onSelectCountry={async (countryCode) => {
+            try {
+              const testMode = localStorage.getItem('testMode');
+              if (testMode === 'true') {
+                // In test mode, just save locally
+                setShowCountrySetup(false);
+                localStorage.setItem('naya_country_set', 'true');
+                return;
+              }
+
+              await api.setCountry(countryCode as any);
+              
+              setShowCountrySetup(false);
+              localStorage.setItem('naya_country_set', 'true');
+            } catch (error) {
+              console.error('Failed to save country:', error);
+            }
           }}
         />
       )}

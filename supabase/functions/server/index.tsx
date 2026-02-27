@@ -14,7 +14,7 @@ app.use(
   "/*",
   cors({
     origin: "*",
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "apikey"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
@@ -29,16 +29,53 @@ const supabase = createClient(
 
 // Helper to verify auth token
 async function verifyAuth(authHeader: string | null) {
-  if (!authHeader) return null;
-  const token = authHeader.split(' ')[1];
-  if (!token) return null;
-
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) {
-    console.error('Auth verification error:', error);
+  if (!authHeader) {
+    console.log('❌ No auth header provided');
     return null;
   }
-  return user;
+  
+  const token = authHeader.split(' ')[1];
+  if (!token) {
+    console.log('❌ No token found in auth header');
+    return null;
+  }
+
+  console.log('🔍 Verifying token (first 20 chars):', token.substring(0, 20) + '...');
+  console.log('🔍 Token length:', token.length);
+
+  try {
+    // Use the anon key client for user verification, not service role
+    const anonClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
+    
+    const { data: { user }, error } = await anonClient.auth.getUser(token);
+    if (error) {
+      console.error('❌ Auth verification error:', {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+        name: error.name
+      });
+      return null;
+    }
+    if (!user) {
+      console.error('❌ No user found for token');
+      return null;
+    }
+    
+    console.log('✅ User verified:', user.id, user.email);
+    return user;
+  } catch (error: any) {
+    console.error('❌ Exception during auth verification:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack
+    });
+    return null;
+  }
 }
 
 // Health check endpoint
@@ -52,6 +89,8 @@ app.post("/make-server-ba08a5a4/auth/signup", async (c) => {
   try {
     const { email, password, displayName } = await c.req.json();
 
+    console.log('Signup attempt for email:', email);
+
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -59,8 +98,12 @@ app.post("/make-server-ba08a5a4/auth/signup", async (c) => {
       email_confirm: true, // Auto-confirm since email server isn't configured
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase createUser error:', error);
+      throw error;
+    }
 
+    console.log('User created successfully:', data.user?.id);
     return c.json({ user: data.user });
   } catch (error: any) {
     console.error('Signup error:', error);
@@ -72,7 +115,14 @@ app.post("/make-server-ba08a5a4/auth/signin", async (c) => {
   try {
     const { email, password } = await c.req.json();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    // Use a per-request client to avoid polluting the server's auth state
+    const perRequestClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
+
+    const { data, error } = await perRequestClient.auth.signInWithPassword({
       email,
       password,
     });
@@ -126,18 +176,29 @@ app.put("/make-server-ba08a5a4/user", async (c) => {
 });
 
 app.post("/make-server-ba08a5a4/user/country", async (c) => {
+  console.log('📍 Set country endpoint called');
+  console.log('📍 Authorization header:', c.req.header('Authorization')?.substring(0, 30) + '...');
+  
   const user = await verifyAuth(c.req.header('Authorization'));
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  if (!user) {
+    console.log('📍 User verification failed, returning 401');
+    return c.json({ code: 401, message: 'Invalid JWT' }, 401);
+  }
 
   try {
-    const { country } = await c.req.json();
+    const body = await c.req.json();
+    console.log('📍 Request body:', body);
+    const { country } = body;
+    console.log('📍 Setting country for user:', user.id, 'to:', country);
+    
     const existing = await kv.get(`user:${user.id}`) || {};
-    const updated = { ...existing, country };
+    const updated = { ...existing, id: user.id, email: user.email, country };
     await kv.set(`user:${user.id}`, updated);
+    console.log('📍 Country set successfully');
     return c.json({ success: true });
   } catch (error: any) {
-    console.error('Set country error:', error);
-    return c.json({ error: error.message }, 500);
+    console.error('📍 Set country error:', error);
+    return c.json({ code: 500, message: error.message }, 500);
   }
 });
 

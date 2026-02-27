@@ -3,10 +3,14 @@ import { useNavigate } from 'react-router';
 import { Plus, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Progress } from '../components/ui/progress';
+import CountrySetupModal from '../components/CountrySetupModal';
 import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
 import type { ChoreSchedule, MealPlan, HouseholdMember } from '../types';
+import type { CountryCode } from '../data/countries';
 import { MEAL_TYPE_GRADIENTS, MEAL_TYPE_LABELS } from '../types';
+import { toast } from 'sonner';
+import { MOCK_MEMBERS, MOCK_CHORE_SCHEDULE, MOCK_MEAL_PLANS, getMealEmoji } from '../data/mock-kenya';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -16,6 +20,7 @@ export default function Dashboard() {
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [showCountrySetup, setShowCountrySetup] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -23,24 +28,91 @@ export default function Dashboard() {
 
   async function loadData() {
     try {
+      // Get current session to check auth status
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-
+      
+      if (!session) {
+        // No session - redirect to sign in
+        console.log('No active session, redirecting to sign in');
+        navigate('/signin');
+        return;
+      }
+      
       setUser(session.user);
-
-      const [choresData, mealsData, membersData] = await Promise.all([
-        api.getChoreSchedules(session.access_token).catch(() => []),
-        api.getMealPlans(session.access_token).catch(() => []),
-        api.getMembers(session.access_token).catch(() => []),
-      ]);
-
-      setChoreSchedules(choresData);
-      setMealPlans(mealsData);
-      setMembers(membersData);
+      await loadUserData();
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
+      // Fall back to mock data on error
+      setChoreSchedules([MOCK_CHORE_SCHEDULE]);
+      setMealPlans(MOCK_MEAL_PLANS);
+      setMembers(MOCK_MEMBERS);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadUserData() {
+    try {
+      // Check if user has selected a country
+      const userData = await api.getUser().catch((err) => {
+        console.error('Failed to get user data:', err);
+        return null;
+      });
+      
+      if (!userData?.country) {
+        setShowCountrySetup(true);
+      }
+
+      const [choresData, mealsData, membersData] = await Promise.all([
+        api.getChoreSchedules().catch(() => []),
+        api.getMealPlans().catch(() => []),
+        api.getMembers().catch(() => []),
+      ]);
+
+      // Use mock data as fallback when server returns empty
+      setChoreSchedules(choresData && choresData.length > 0 ? choresData : [MOCK_CHORE_SCHEDULE]);
+      setMealPlans(mealsData && mealsData.length > 0 ? mealsData : MOCK_MEAL_PLANS);
+      setMembers(membersData && membersData.length > 0 ? membersData : MOCK_MEMBERS);
+    } catch (error) {
+      console.error('Failed to load user data, using mock data:', error);
+      setChoreSchedules([MOCK_CHORE_SCHEDULE]);
+      setMealPlans(MOCK_MEAL_PLANS);
+      setMembers(MOCK_MEMBERS);
+    }
+  }
+
+  async function handleSelectCountry(countryCode: CountryCode) {
+    try {
+      // 1. Save the country preference
+      await api.setCountry(countryCode as any);
+      
+      // 2. Write default meal plans to database (app-side defaults)
+      toast.info('Setting up your meal plans...');
+      for (const mealPlan of MOCK_MEAL_PLANS) {
+        const { id, ...mealPlanData } = mealPlan; // Remove id, let backend generate it
+        await api.createMealPlan(mealPlanData);
+      }
+      
+      // 3. Write default chore schedule to database (app-side defaults)
+      toast.info('Setting up your chore schedules...');
+      const { id, ...choreScheduleData } = MOCK_CHORE_SCHEDULE; // Remove id, let backend generate it
+      await api.createChoreSchedule(choreScheduleData);
+      
+      // 4. Write default household members to database
+      toast.info('Setting up your household...');
+      for (const member of MOCK_MEMBERS) {
+        const { id, ...memberData } = member; // Remove id, let backend generate it
+        await api.createMember(memberData);
+      }
+      
+      toast.success('Country selected! Your household is ready with local defaults.');
+      setShowCountrySetup(false);
+      
+      // 5. Reload data from database
+      await loadUserData();
+    } catch (error) {
+      console.error('Failed to save country:', error);
+      toast.error('Failed to save country');
     }
   }
 
@@ -141,48 +213,6 @@ export default function Dashboard() {
             <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-[#6F6F6F]" />
           </button>
         </div>
-
-        {/* Weekly Chores Progress */}
-        {activeSchedule && (
-          <div className="bg-gray-50 rounded-2xl p-4 sm:p-5">
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#5FB3A6] flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h3 className="text-lg sm:text-xl font-bold text-[#2F2F2F]">CHORES</h3>
-              </div>
-              <span className="text-xs sm:text-sm text-[#6F6F6F] font-medium whitespace-nowrap">
-                {completedWeekTasks}/{allWeekTasks.length}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs sm:text-sm font-medium text-[#6F6F6F] mb-2">
-              <span>{completedWeekTasks} done</span>
-              <span>{allWeekTasks.length} total</span>
-            </div>
-
-            <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden mb-3">
-              <div
-                className="absolute top-0 left-0 h-full bg-[#5FB3A6] rounded-full transition-all duration-500"
-                style={{ width: `${allWeekTasks.length > 0 ? (completedWeekTasks / allWeekTasks.length) * 100 : 0}%` }}
-              />
-            </div>
-
-            <div className="flex items-center gap-3 sm:gap-6 text-xs sm:text-sm flex-wrap">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[#5FB3A6] flex-shrink-0" />
-                <span className="text-[#6F6F6F]">Done ({completedWeekTasks})</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-gray-200 flex-shrink-0" />
-                <span className="text-[#6F6F6F]">Remaining ({allWeekTasks.length - completedWeekTasks})</span>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Today's Chores Card */}
@@ -407,6 +437,15 @@ export default function Dashboard() {
           </div>
         </button>
       </div>
+
+      {/* Country Setup Modal */}
+      {showCountrySetup && (
+        <CountrySetupModal
+          isOpen={showCountrySetup}
+          onClose={() => setShowCountrySetup(false)}
+          onSelectCountry={handleSelectCountry}
+        />
+      )}
     </div>
   );
 }

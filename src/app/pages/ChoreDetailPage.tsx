@@ -8,6 +8,7 @@ import type { ChoreSchedule, ChoreTask, HouseholdMember } from '../types';
 import { DAYS_SHORT, PRIORITY_COLORS, STATUS_COLORS } from '../types';
 import { toast } from 'sonner';
 import AddTaskModal from '../components/AddTaskModal';
+import { MOCK_CHORE_SCHEDULE, MOCK_MEMBERS } from '../data/mock-kenya';
 
 export default function ChoreDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,7 +19,6 @@ export default function ChoreDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showAddTask, setShowAddTask] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -26,35 +26,43 @@ export default function ChoreDetailPage() {
 
   async function loadData() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token || !id) return;
+      // Check for mock data first
+      if (id === MOCK_CHORE_SCHEDULE.id) {
+        setSchedule(MOCK_CHORE_SCHEDULE);
+        setMembers(MOCK_MEMBERS);
+        setLoading(false);
+        return;
+      }
 
-      setAccessToken(session.access_token);
-      
       const [scheduleData, membersData] = await Promise.all([
-        api.getChoreSchedule(session.access_token, id),
-        api.getMembers(session.access_token).catch(() => []),
+        api.getChoreSchedule(id!),
+        api.getMembers().catch(() => []),
       ]);
 
       setSchedule(scheduleData);
-      setMembers(membersData);
+      setMembers(membersData && membersData.length > 0 ? membersData : MOCK_MEMBERS);
     } catch (error) {
-      console.error('Failed to load schedule:', error);
-      toast.error('Failed to load schedule');
+      console.error('Failed to load schedule, trying mock data:', error);
+      if (id === MOCK_CHORE_SCHEDULE.id) {
+        setSchedule(MOCK_CHORE_SCHEDULE);
+        setMembers(MOCK_MEMBERS);
+      } else {
+        toast.error('Failed to load schedule');
+      }
     } finally {
       setLoading(false);
     }
   }
 
   async function handleToggleTask(taskId: string) {
-    if (!schedule || !accessToken) return;
+    if (!schedule) return;
 
     const updatedTasks = schedule.tasks.map(task =>
       task.id === taskId ? { ...task, completed: !task.completed } : task
     );
 
     try {
-      const updated = await api.updateChoreSchedule(accessToken, schedule.id, {
+      const updated = await api.updateChoreSchedule(schedule.id, {
         tasks: updatedTasks,
       });
       setSchedule(updated);
@@ -65,12 +73,12 @@ export default function ChoreDetailPage() {
   }
 
   async function handleDeleteTask(taskId: string) {
-    if (!schedule || !accessToken) return;
+    if (!schedule) return;
 
     const updatedTasks = schedule.tasks.filter(task => task.id !== taskId);
 
     try {
-      const updated = await api.updateChoreSchedule(accessToken, schedule.id, {
+      const updated = await api.updateChoreSchedule(schedule.id, {
         tasks: updatedTasks,
       });
       setSchedule(updated);
@@ -82,7 +90,7 @@ export default function ChoreDetailPage() {
   }
 
   async function handleAddTask(task: Omit<ChoreTask, 'id'>) {
-    if (!schedule || !accessToken) return;
+    if (!schedule) return;
 
     const newTask = {
       ...task,
@@ -90,7 +98,7 @@ export default function ChoreDetailPage() {
     };
 
     try {
-      const updated = await api.updateChoreSchedule(accessToken, schedule.id, {
+      const updated = await api.updateChoreSchedule(schedule.id, {
         tasks: [...schedule.tasks, newTask],
       });
       setSchedule(updated);
@@ -103,11 +111,11 @@ export default function ChoreDetailPage() {
   }
 
   async function handleGenerateAI() {
-    if (!accessToken || !schedule) return;
+    if (!schedule) return;
 
     setGeneratingAI(true);
     try {
-      const updated = await api.generateChores(accessToken, schedule.id);
+      const updated = await api.generateChores(schedule.id);
       setSchedule(updated);
       toast.success('AI tasks generated!');
     } catch (error) {
@@ -181,33 +189,38 @@ export default function ChoreDetailPage() {
       </div>
 
       {/* Day Chips */}
-      <div className="overflow-x-auto">
-        <div className="flex gap-2 pb-2">
-          {DAYS_SHORT.map((day, index) => {
-            const tasksForDay = schedule.tasks.filter(t => t.day === index);
-            const completedForDay = tasksForDay.filter(t => t.completed).length;
-            const isSelected = selectedDay === index;
+      <div className="relative">
+        <div className="overflow-x-auto scrollbar-hide">
+          <div className="flex gap-2 pb-2 pt-2">
+            {DAYS_SHORT.map((day, index) => {
+              const tasksForDay = schedule.tasks.filter(t => t.day === index);
+              const completedForDay = tasksForDay.filter(t => t.completed).length;
+              const isSelected = selectedDay === index;
 
-            return (
-              <button
-                key={day}
-                onClick={() => setSelectedDay(index)}
-                className={`flex-shrink-0 px-6 py-3 rounded-full font-semibold transition-all ${
-                  isSelected
-                    ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg scale-105'
-                    : 'bg-white text-[#6F6F6F] border-2 border-gray-200 hover:border-[#F26B5E]'
-                }`}
-              >
-                <div className="text-center">
-                  <div className="text-base">{day}</div>
-                  <div className="text-xs mt-1 opacity-80">
-                    {completedForDay}/{tasksForDay.length}
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDay(index)}
+                  className={`flex-shrink-0 px-6 py-3 rounded-full font-semibold transition-all ${
+                    isSelected
+                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg scale-105'
+                      : 'bg-white text-[#6F6F6F] border-2 border-gray-200 hover:border-[#F26B5E]'
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="text-base">{day}</div>
+                    <div className="text-xs mt-1 opacity-80">
+                      {completedForDay}/{tasksForDay.length}
+                    </div>
                   </div>
-                </div>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
         </div>
+        {/* Gradient fade indicators */}
+        <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-[#F9F3F1] to-transparent pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#F9F3F1] to-transparent pointer-events-none" />
       </div>
 
       {/* Tasks List */}

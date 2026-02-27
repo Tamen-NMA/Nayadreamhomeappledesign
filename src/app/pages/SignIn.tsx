@@ -1,13 +1,98 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Calendar, Sparkles, ListChecks } from 'lucide-react';
+import { Calendar, Sparkles, ListChecks, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { supabase } from '../utils/supabase';
+import { api } from '../utils/api';
 
 export default function SignIn() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+
+  async function handleEmailSignIn() {
+    if (!email || !password) {
+      toast.error('Please enter email and password');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        // If invalid credentials, suggest signing up
+        if (error.message.includes('Invalid login credentials')) {
+          toast.error('Invalid email or password. Don\'t have an account? Click "Sign up" below.');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      if (data.session) {
+        toast.success('Welcome back!');
+        navigate('/');
+      }
+    } catch (error: any) {
+      console.error('Email sign in error:', error);
+      toast.error(error.message || 'Failed to sign in');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleEmailSignUp() {
+    if (!email || !password || !displayName) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Call the backend signup endpoint
+      const data = await api.signUp(email, password, displayName);
+      console.log('User created on backend:', data.user?.id);
+      toast.success('Account created! Signing you in...');
+
+      // Wait a moment for the user to be fully created
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Now sign in with the new account
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        console.error('Sign in error after signup:', signInError);
+        throw signInError;
+      }
+
+      if (signInData.session) {
+        toast.success('Welcome to Naya Dream Home!');
+        navigate('/');
+      }
+    } catch (error: any) {
+      console.error('Sign up error:', error);
+      toast.error(error.message || 'Failed to create account');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleAppleSignIn() {
     setLoading(true);
@@ -72,11 +157,100 @@ export default function SignIn() {
         {/* Auth Card */}
         <div className="bg-white rounded-[20px] p-8 shadow-lg mb-6">
           <h2 className="text-xl font-semibold text-[#2F2F2F] mb-3 text-center">
-            Sign in to continue
+            {isSignUp ? 'Create your account' : 'Sign in to continue'}
           </h2>
           <p className="text-[#6F6F6F] text-sm mb-6 text-center">
-            Choose your preferred sign in method
+            {isSignUp ? 'Fill in your details to get started' : 'Choose your preferred sign in method'}
           </p>
+
+          {/* Email/Password Form */}
+          <div className="space-y-4 mb-6">
+            {isSignUp && (
+              <div>
+                <label className="block text-sm font-medium text-[#2F2F2F] mb-2">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 focus:border-[#F26B5E] focus:outline-none transition-colors"
+                />
+              </div>
+            )}
+            
+            <div>
+              <label className="block text-sm font-medium text-[#2F2F2F] mb-2">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6F6F6F]" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  className="w-full h-12 pl-12 pr-4 rounded-2xl border-2 border-gray-200 focus:border-[#F26B5E] focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[#2F2F2F] mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6F6F6F]" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={isSignUp ? 'Create a password (min 6 characters)' : 'Enter your password'}
+                  className="w-full h-12 pl-12 pr-12 rounded-2xl border-2 border-gray-200 focus:border-[#F26B5E] focus:outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6F6F6F] hover:text-[#2F2F2F]"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              onClick={isSignUp ? handleEmailSignUp : handleEmailSignIn}
+              disabled={loading}
+              className="w-full h-12 bg-[#F26B5E] hover:bg-[#e05a4e] text-white rounded-2xl font-semibold"
+            >
+              {loading ? 'Please wait...' : (isSignUp ? 'Create Account' : 'Sign In')}
+            </Button>
+
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setEmail('');
+                  setPassword('');
+                  setDisplayName('');
+                }}
+                className="text-sm text-[#F26B5E] hover:underline font-medium"
+              >
+                {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+              </button>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-[#6F6F6F]">Or continue with</span>
+            </div>
+          </div>
 
           {/* Social Sign In Buttons */}
           <div className="space-y-3">

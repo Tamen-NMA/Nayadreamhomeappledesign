@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Plus, UserCircle, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
 import type { HouseholdMember } from '../types';
+import { api } from '../utils/api';
 import { toast } from 'sonner';
 import AddMemberModal from '../components/AddMemberModal';
+import { useNavigate } from 'react-router';
+import { MOCK_MEMBERS } from '../data/mock-kenya';
 
 export default function HouseholdPage() {
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadMembers();
@@ -19,25 +21,19 @@ export default function HouseholdPage() {
 
   async function loadMembers() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-
-      setAccessToken(session.access_token);
-      const data = await api.getMembers(session.access_token);
-      setMembers(data);
+      const data = await api.getMembers();
+      setMembers(data && data.length > 0 ? data : MOCK_MEMBERS);
     } catch (error) {
-      console.error('Failed to load members:', error);
-      toast.error('Failed to load household members');
+      console.error('Failed to load members, using mock data:', error);
+      setMembers(MOCK_MEMBERS);
     } finally {
       setLoading(false);
     }
   }
 
   async function handleAddMember(member: Omit<HouseholdMember, 'id'>) {
-    if (!accessToken) return;
-
     try {
-      const newMember = await api.createMember(accessToken, member);
+      const newMember = await api.createMember(member);
       setMembers([...members, newMember]);
       setShowAddModal(false);
       toast.success('Member added!');
@@ -48,10 +44,8 @@ export default function HouseholdPage() {
   }
 
   async function handleDeleteMember(id: string) {
-    if (!accessToken) return;
-
     try {
-      await api.deleteMember(accessToken, id);
+      await api.deleteMember(id);
       setMembers(members.filter(m => m.id !== id));
       toast.success('Member removed');
     } catch (error) {

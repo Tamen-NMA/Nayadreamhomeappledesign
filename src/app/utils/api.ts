@@ -1,196 +1,237 @@
 import { projectId, publicAnonKey } from '/utils/supabase/info';
-import type { ChoreSchedule, MealPlan, HouseholdMember, User, Country } from './types';
+import { getAccessToken } from './auth';
+import type { ChoreSchedule, MealPlan, HouseholdMember, User, Country } from '../types';
 
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-ba08a5a4`;
-
-async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      'Authorization': `Bearer ${publicAnonKey}`,
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error (${response.status}): ${errorText}`);
+const getAPIBase = () => {
+  const id = projectId;
+  if (!id) {
+    console.error('projectId is not defined');
+    throw new Error('API configuration error: projectId is missing');
   }
+  return `https://${id}.supabase.co/functions/v1/make-server-ba08a5a4`;
+};
 
-  return response.json();
+/**
+ * Core API call function.
+ * - For authenticated requests (requiresAuth=true), automatically gets a fresh token.
+ * - On 401, refreshes the token once and retries.
+ * - Always sends the publicAnonKey as apikey header for Supabase Edge Function infrastructure.
+ */
+async function apiCall<T>(
+  endpoint: string,
+  options?: RequestInit & { requiresAuth?: boolean },
+  _isRetry = false
+): Promise<T> {
+  try {
+    const API_BASE = getAPIBase();
+    const url = `${API_BASE}${endpoint}`;
+    const { requiresAuth, ...fetchOptions } = options || {};
+
+    // Build headers
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'apikey': publicAnonKey,
+    };
+
+    if (requiresAuth) {
+      const token = await getAccessToken();
+      if (!token) {
+        throw new Error('No valid session. Please sign in again.');
+      }
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Merge any additional headers from the caller (but auth is handled above)
+    if (fetchOptions.headers) {
+      const extraHeaders = fetchOptions.headers as Record<string, string>;
+      Object.entries(extraHeaders).forEach(([key, value]) => {
+        // Don't override Authorization if we already set it via requiresAuth
+        if (key !== 'Authorization' || !requiresAuth) {
+          headers[key] = value;
+        }
+      });
+    }
+
+    const response = await fetch(url, {
+      ...fetchOptions,
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+
+      // On 401, retry once with a fresh token (only for authenticated calls)
+      if (response.status === 401 && requiresAuth && !_isRetry) {
+        console.warn('Got 401, retrying with fresh token...');
+        return apiCall<T>(endpoint, options, true);
+      }
+
+      console.error('API Error Response:', errorText);
+      throw new Error(`API error (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('API Call failed:', error);
+    throw error;
+  }
 }
 
 export const api = {
-  // Auth
-  async signIn(email: string, password: string) {
-    return apiCall<{ session: any; user: User }>('/auth/signin', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-  },
-
+  // Auth (no auth required - these use publicAnonKey)
   async signUp(email: string, password: string, displayName: string) {
     return apiCall<{ user: User }>('/auth/signup', {
       method: 'POST',
+      headers: { 'Authorization': `Bearer ${publicAnonKey}` },
       body: JSON.stringify({ email, password, displayName }),
     });
   },
 
-  // User
-  async getUser(accessToken: string) {
-    return apiCall<User>('/user', {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    });
+  // User (authenticated)
+  async getUser() {
+    return apiCall<User>('/user', { requiresAuth: true });
   },
 
-  async updateUser(accessToken: string, updates: Partial<User>) {
+  async updateUser(updates: Partial<User>) {
     return apiCall<User>('/user', {
       method: 'PUT',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
       body: JSON.stringify(updates),
     });
   },
 
-  async setCountry(accessToken: string, country: Country) {
+  async setCountry(country: Country) {
     return apiCall<{ success: boolean }>('/user/country', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
       body: JSON.stringify({ country }),
     });
   },
 
-  // Household Members
-  async getMembers(accessToken: string) {
-    return apiCall<HouseholdMember[]>('/members', {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    });
+  // Household Members (authenticated)
+  async getMembers() {
+    return apiCall<HouseholdMember[]>('/members', { requiresAuth: true });
   },
 
-  async createMember(accessToken: string, member: Omit<HouseholdMember, 'id'>) {
+  async createMember(member: Omit<HouseholdMember, 'id'>) {
     return apiCall<HouseholdMember>('/members', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
       body: JSON.stringify(member),
     });
   },
 
-  async updateMember(accessToken: string, id: string, updates: Partial<HouseholdMember>) {
+  async updateMember(id: string, updates: Partial<HouseholdMember>) {
     return apiCall<HouseholdMember>(`/members/${id}`, {
       method: 'PUT',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
       body: JSON.stringify(updates),
     });
   },
 
-  async deleteMember(accessToken: string, id: string) {
+  async deleteMember(id: string) {
     return apiCall<{ success: boolean }>(`/members/${id}`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
     });
   },
 
-  // Chore Schedules
-  async getChoreSchedules(accessToken: string) {
-    return apiCall<ChoreSchedule[]>('/chores', {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    });
+  // Chore Schedules (authenticated)
+  async getChoreSchedules() {
+    return apiCall<ChoreSchedule[]>('/chores', { requiresAuth: true });
   },
 
-  async getChoreSchedule(accessToken: string, id: string) {
-    return apiCall<ChoreSchedule>(`/chores/${id}`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    });
+  async getChoreSchedule(id: string) {
+    return apiCall<ChoreSchedule>(`/chores/${id}`, { requiresAuth: true });
   },
 
-  async createChoreSchedule(accessToken: string, schedule: Omit<ChoreSchedule, 'id'>) {
+  async createChoreSchedule(schedule: Omit<ChoreSchedule, 'id'>) {
     return apiCall<ChoreSchedule>('/chores', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
       body: JSON.stringify(schedule),
     });
   },
 
-  async updateChoreSchedule(accessToken: string, id: string, updates: Partial<ChoreSchedule>) {
+  async updateChoreSchedule(id: string, updates: Partial<ChoreSchedule>) {
     return apiCall<ChoreSchedule>(`/chores/${id}`, {
       method: 'PUT',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
       body: JSON.stringify(updates),
     });
   },
 
-  async deleteChoreSchedule(accessToken: string, id: string) {
+  async deleteChoreSchedule(id: string) {
     return apiCall<{ success: boolean }>(`/chores/${id}`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
     });
   },
 
-  async generateChores(accessToken: string, scheduleId: string) {
+  async generateChores(scheduleId: string) {
     return apiCall<ChoreSchedule>(`/chores/${scheduleId}/generate`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
     });
   },
 
-  // Meal Plans
-  async getMealPlans(accessToken: string) {
-    return apiCall<MealPlan[]>('/meals', {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    });
+  // Meal Plans (authenticated)
+  async getMealPlans() {
+    return apiCall<MealPlan[]>('/meals', { requiresAuth: true });
   },
 
-  async getMealPlan(accessToken: string, id: string) {
-    return apiCall<MealPlan>(`/meals/${id}`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    });
+  async getMealPlan(id: string) {
+    return apiCall<MealPlan>(`/meals/${id}`, { requiresAuth: true });
   },
 
-  async createMealPlan(accessToken: string, plan: Omit<MealPlan, 'id'>) {
+  async createMealPlan(plan: Omit<MealPlan, 'id'>) {
     return apiCall<MealPlan>('/meals', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
       body: JSON.stringify(plan),
     });
   },
 
-  async updateMealPlan(accessToken: string, id: string, updates: Partial<MealPlan>) {
+  async updateMealPlan(id: string, updates: Partial<MealPlan>) {
     return apiCall<MealPlan>(`/meals/${id}`, {
       method: 'PUT',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
       body: JSON.stringify(updates),
     });
   },
 
-  async deleteMealPlan(accessToken: string, id: string) {
+  async deleteMealPlan(id: string) {
     return apiCall<{ success: boolean }>(`/meals/${id}`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
     });
   },
 
-  async generateMeals(accessToken: string, planId: string) {
+  async generateMeals(planId: string) {
     return apiCall<MealPlan>(`/meals/${planId}/generate`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
     });
   },
 
-  // Shared Tasks
+  // Shared Tasks (no auth required)
   async getSharedTasks(token: string) {
-    return apiCall<{ member: HouseholdMember; tasks: any[] }>(`/shared/${token}`);
+    return apiCall<{ member: HouseholdMember; tasks: any[] }>(`/shared/${token}`, {
+      headers: { 'Authorization': `Bearer ${publicAnonKey}` },
+    });
   },
 
   async toggleSharedTask(token: string, taskId: string) {
     return apiCall<{ success: boolean }>(`/shared/${token}/toggle`, {
       method: 'POST',
+      headers: { 'Authorization': `Bearer ${publicAnonKey}` },
       body: JSON.stringify({ taskId }),
     });
   },
 
-  async getShareLink(accessToken: string, memberId: string) {
+  async getShareLink(memberId: string) {
     return apiCall<{ shareLink: string }>(`/members/${memberId}/share-link`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+      requiresAuth: true,
     });
   },
 };
