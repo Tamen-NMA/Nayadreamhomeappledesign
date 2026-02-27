@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { User, Globe, Utensils, Heart, CreditCard, LogOut, ChevronRight } from 'lucide-react';
+import { User, Globe, Utensils, Heart, CreditCard, LogOut, ChevronRight, Camera } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { supabase } from '../utils/supabase';
 import { COUNTRIES } from '../data/countries';
 import type { User as UserType } from '../types';
 import { api } from '../utils/api';
+import userAvatar from 'figma:asset/7d2cbe39d65ddd8a893619b55268255395c97d20.png';
 
 const DIETARY_RESTRICTIONS = [
   'Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free', 
@@ -27,10 +28,31 @@ export default function SettingsPage() {
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string>(userAvatar);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    loadUserData();
+    checkAuthAndLoadData();
   }, []);
+
+  async function checkAuthAndLoadData() {
+    try {
+      // Check if user is authenticated
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.log('No active session, redirecting to sign in');
+        navigate('/signin');
+        return;
+      }
+
+      // User is authenticated, load data
+      await loadUserData();
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      navigate('/signin');
+    }
+  }
 
   async function loadUserData() {
     try {
@@ -41,6 +63,7 @@ export default function SettingsPage() {
       setSelectedCountry(userData.country || 'kenya');
       setSelectedDietary(userData.dietaryRestrictions || []);
       setSelectedCuisines(userData.cuisinePreferences || []);
+      setAvatarUrl(userData.avatarUrl || userAvatar);
     } catch (error) {
       console.error('Failed to load user:', error);
       toast.error('Failed to load user data');
@@ -88,11 +111,43 @@ export default function SettingsPage() {
   async function handleSignOut() {
     try {
       await supabase.auth.signOut();
-      navigate('/sign-in');
+      navigate('/signin');
       toast.success('Signed out successfully');
     } catch (error) {
       console.error('Sign out error:', error);
       toast.error('Failed to sign out');
+    }
+  }
+
+  async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
+    try {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      // Validate file size (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image must be less than 2MB');
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('File must be an image');
+        return;
+      }
+
+      setUploading(true);
+      
+      // Upload avatar
+      const newAvatarUrl = await api.uploadAvatar(file);
+      setAvatarUrl(newAvatarUrl);
+      
+      toast.success('Avatar updated successfully!');
+    } catch (error) {
+      console.error('Failed to upload avatar:', error);
+      toast.error('Failed to upload avatar');
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -138,6 +193,46 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-4">
+          {/* Avatar Upload */}
+          <div>
+            <label className="block text-sm font-medium text-[#2F2F2F] mb-3">
+              Profile Picture
+            </label>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <img
+                  src={avatarUrl}
+                  alt="Profile"
+                  className="w-20 h-20 rounded-full shadow-lg border-2 border-white object-cover"
+                />
+                <label
+                  htmlFor="avatar-upload"
+                  className={`absolute bottom-0 right-0 w-8 h-8 bg-[#F26B5E] rounded-full flex items-center justify-center cursor-pointer shadow-lg hover:bg-[#e05a4e] transition-colors ${
+                    uploading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <Camera className="w-4 h-4 text-white" />
+                </label>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-[#6F6F6F] mb-1">
+                  {uploading ? 'Uploading...' : 'Click the camera icon to upload a new photo'}
+                </p>
+                <p className="text-xs text-[#9C9C9C]">
+                  JPG, PNG or GIF. Max size 2MB.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-[#2F2F2F] mb-2">
               Display Name

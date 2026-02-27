@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Plus, Sparkles, Calendar } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Progress } from '../components/ui/progress';
@@ -13,21 +13,53 @@ import { MOCK_CHORE_SCHEDULE } from '../data/mock-kenya';
 
 export default function ChoresListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const showList = searchParams.get('list') === 'true';
   const [schedules, setSchedules] = useState<ChoreSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+  const [redirectId, setRedirectId] = useState<string | null>(null);
 
   useEffect(() => {
     loadSchedules();
-  }, []);
+  }, [showList]);
+
+  // Separate effect for redirect to avoid hooks ordering issues
+  useEffect(() => {
+    if (shouldRedirect && redirectId) {
+      navigate(`/chores/${redirectId}`, { replace: true });
+    }
+  }, [shouldRedirect, redirectId, navigate]);
 
   async function loadSchedules() {
+    setLoading(true);
+    setShouldRedirect(false);
+    setRedirectId(null);
+    
     try {
       const data = await api.getChoreSchedules();
-      setSchedules(data && data.length > 0 ? data : [MOCK_CHORE_SCHEDULE]);
+      const allSchedules = data && data.length > 0 ? data : [MOCK_CHORE_SCHEDULE];
+      setSchedules(allSchedules);
+      
+      // Auto-redirect to active schedule if not showing list
+      if (!showList && allSchedules.length > 0) {
+        const activeSchedule = allSchedules.find(s => s.status === 'active') || allSchedules[0];
+        setRedirectId(activeSchedule.id);
+        setShouldRedirect(true);
+        return;
+      }
     } catch (error) {
       console.error('Failed to load chore schedules, using mock data:', error);
-      setSchedules([MOCK_CHORE_SCHEDULE]);
+      const mockSchedules = [MOCK_CHORE_SCHEDULE];
+      setSchedules(mockSchedules);
+      
+      // Auto-redirect to mock schedule if not showing list
+      if (!showList) {
+        setRedirectId(MOCK_CHORE_SCHEDULE.id);
+        setShouldRedirect(true);
+        return;
+      }
     } finally {
       setLoading(false);
     }

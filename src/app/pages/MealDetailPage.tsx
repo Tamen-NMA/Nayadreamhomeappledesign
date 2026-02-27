@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { ArrowLeft, Calendar, Grid3x3, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { ChevronLeft, Plus, Search, X, Calendar, Grid3x3, ArrowLeft, Clock, BookOpen } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { toast } from 'sonner';
-import { supabase } from '../utils/supabase';
-import type { MealPlan, Meal } from '../types';
 import { api } from '../utils/api';
-import { DAYS_SHORT } from '../types';
+import { toast } from 'sonner';
+import type { MealPlan, Meal } from '../types';
 import { MOCK_MEAL_PLANS, getMealEmoji, getMonthlyCalendarData } from '../data/mock-kenya';
+import { searchMeals, createMealFromTemplate, type MealTemplate } from '../data/meals-database';
+import MealRecipeModal from '../components/MealRecipeModal';
 
 type ViewMode = 'daily' | 'monthly';
 
@@ -32,10 +32,26 @@ export default function MealDetailPage() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
   const [selectedDay, setSelectedDay] = useState(0); // 0 = Monday
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAddMealModal, setShowAddMealModal] = useState(false);
+  const [selectedMealType, setSelectedMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
+  const [searchResults, setSearchResults] = useState<MealTemplate[]>([]);
+  const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
 
   useEffect(() => {
     loadPlan();
   }, [id]);
+
+  // Search handling - must be before any early returns
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const results = searchMeals(searchQuery);
+      setSearchResults(results);
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery]);
 
   async function loadPlan() {
     try {
@@ -64,6 +80,33 @@ export default function MealDetailPage() {
       setLoading(false);
     }
   }
+  
+  // Add meal to plan
+  const handleAddMeal = (template: MealTemplate) => {
+    if (!plan) return;
+    
+    // Day mapping: selectedDay 0=Mon(1), 1=Tue(2)... 6=Sun(0)
+    const dayMap = [1, 2, 3, 4, 5, 6, 0];
+    const currentDayValue = dayMap[selectedDay];
+    
+    // Create new meal from template
+    const newMealData = createMealFromTemplate(template, currentDayValue);
+    const newMeal: Meal = {
+      ...newMealData,
+      id: `meal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    };
+    
+    // Add to plan
+    const updatedPlan = {
+      ...plan,
+      meals: [...plan.meals, newMeal],
+    };
+    
+    setPlan(updatedPlan);
+    setShowAddMealModal(false);
+    setSearchQuery('');
+    toast.success(`Added ${template.name} to ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][selectedDay]}`);
+  };
 
   if (loading) {
     return (
@@ -102,22 +145,77 @@ export default function MealDetailPage() {
   const currentDayValue = dayMap[selectedDay];
 
   const monthlyData = getMonthlyCalendarData();
-
+  
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-4xl pb-24">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate('/meals')}
-          className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center hover:shadow-md transition-shadow"
-        >
-          <ArrowLeft className="w-5 h-5 text-[#2F2F2F]" />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-[#2F2F2F]">{plan.title}</h1>
-          <p className="text-sm text-[#6F6F6F]">
-            {plan.weekStart} — {plan.weekEnd}
-          </p>
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/meals?list=true')}
+            className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center hover:shadow-md transition-shadow"
+          >
+            <ArrowLeft className="w-5 h-5 text-[#2F2F2F]" />
+          </button>
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-bold text-[#2F2F2F]">{plan.title}</h1>
+              {/* Status Badge */}
+              <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                plan.status === 'active' ? 'bg-green-100 text-green-700' :
+                plan.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                'bg-amber-100 text-amber-700'
+              }`}>
+                {plan.status}
+              </div>
+            </div>
+            <p className="text-sm text-[#6F6F6F]">
+              {plan.weekStart} — {plan.weekEnd} · {plan.servings} servings
+            </p>
+          </div>
+          {/* Action Buttons - Desktop Only */}
+          <div className="hidden md:flex items-center gap-2">
+            <Button
+              onClick={() => setShowAddMealModal(true)}
+              className="rounded-2xl h-10 px-5 bg-[#5FB3A6] hover:bg-[#4fa396] text-white font-semibold"
+            >
+              Add Meal
+            </Button>
+            <Button
+              onClick={() => {
+                if (confirm('Are you sure you want to delete this meal plan?')) {
+                  toast.success('Meal plan deleted');
+                  navigate('/meals');
+                }
+              }}
+              className="rounded-2xl h-10 px-5 bg-white hover:bg-red-50 text-[#F26B5E] font-semibold border-2 border-[#F26B5E]"
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+        
+        {/* Search Bar - Desktop Only */}
+        <div className="hidden md:block relative">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6F6F6F]" />
+            <input
+              type="text"
+              placeholder="Search meals by name or ingredient..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setShowAddMealModal(true)}
+              className="w-full bg-white rounded-2xl px-12 py-3 border-0 shadow-sm text-[#2F2F2F] placeholder:text-[#9C9C9C] focus:outline-none focus:ring-2 focus:ring-[#5FB3A6]"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2"
+              >
+                <X className="w-5 h-5 text-[#6F6F6F] hover:text-[#2F2F2F]" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -164,7 +262,7 @@ export default function MealDetailPage() {
                     <button
                       key={day}
                       onClick={() => setSelectedDay(index)}
-                      className={`flex-shrink-0 px-6 py-3 rounded-full font-semibold transition-all ${
+                      className={`flex-shrink-0 px-6 py-3 rounded-2xl font-semibold transition-all ${
                         isSelected
                           ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg scale-105'
                           : 'bg-white text-[#6F6F6F] border-2 border-gray-200 hover:border-[#F26B5E]'
@@ -205,9 +303,13 @@ export default function MealDetailPage() {
                   {meals.map((meal) => {
                     const emoji = getMealEmoji(meal.name);
                     return (
-                      <div
+                      <button
                         key={meal.id}
-                        className="bg-white rounded-2xl p-4 shadow-sm"
+                        onClick={() => {
+                          setSelectedMeal(meal);
+                          setShowRecipeModal(true);
+                        }}
+                        className="w-full bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-all text-left"
                       >
                         <div className="flex items-start gap-3">
                           <span className="text-3xl">{emoji}</span>
@@ -228,7 +330,7 @@ export default function MealDetailPage() {
                             </div>
                             {meal.ingredients && (
                               <div className="flex flex-wrap gap-1 mt-2">
-                                {meal.ingredients.split(',').map((ingredient, idx) => (
+                                {meal.ingredients.split(',').slice(0, 4).map((ingredient, idx) => (
                                   <span
                                     key={idx}
                                     className="px-2 py-1 bg-gray-100 rounded-lg text-xs text-[#6F6F6F]"
@@ -236,11 +338,20 @@ export default function MealDetailPage() {
                                     {ingredient.trim()}
                                   </span>
                                 ))}
+                                {meal.ingredients.split(',').length > 4 && (
+                                  <span className="text-xs text-[#9C9C9C]">
+                                    +{meal.ingredients.split(',').length - 4} more
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
+                          <div className="flex flex-col items-center gap-1 text-[#5FB3A6]">
+                            <BookOpen className="w-5 h-5" />
+                            <span className="text-[10px] font-medium">Recipe</span>
+                          </div>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -346,6 +457,113 @@ export default function MealDetailPage() {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Add Meal Modal - Desktop Only */}
+      {showAddMealModal && (
+        <div 
+          className="hidden md:block fixed inset-0 bg-black/50 z-50"
+          onClick={() => {
+            setShowAddMealModal(false);
+            setSearchQuery('');
+          }}
+        >
+          <div 
+            className="absolute top-20 left-1/2 -translate-x-1/2 w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-6 max-h-[70vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-[#2F2F2F]">
+                Add Meal to {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][selectedDay]}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAddMealModal(false);
+                  setSearchQuery('');
+                }}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center"
+              >
+                <X className="w-5 h-5 text-[#6F6F6F]" />
+              </button>
+            </div>
+            
+            {/* Meal Type Filter */}
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+              {(['breakfast', 'lunch', 'dinner', 'snack'] as const).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setSelectedMealType(type)}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
+                    selectedMealType === type
+                      ? 'bg-[#F26B5E] text-white'
+                      : 'bg-gray-100 text-[#6F6F6F] hover:bg-gray-200'
+                  }`}
+                >
+                  {MEAL_TYPE_LABELS[type]}
+                </button>
+              ))}
+            </div>
+            
+            {/* Search Results */}
+            <div className="space-y-2">
+              {(searchQuery ? searchResults : searchMeals('', selectedMealType)).map((template) => {
+                const emoji = getMealEmoji(template.name);
+                return (
+                  <button
+                    key={template.id}
+                    onClick={() => handleAddMeal(template)}
+                    className="w-full bg-gray-50 hover:bg-gray-100 rounded-2xl p-4 text-left transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">{emoji}</span>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-[#2F2F2F] mb-1">{template.name}</h4>
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="flex items-center gap-1 text-sm text-[#6F6F6F]">
+                            <Clock className="w-4 h-4" />
+                            <span>{template.prepTime} min</span>
+                          </div>
+                          <span className="text-sm text-[#6F6F6F]">{template.calories} cal</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {template.ingredients.split(',').slice(0, 4).map((ingredient, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-0.5 bg-white rounded-lg text-xs text-[#6F6F6F]"
+                            >
+                              {ingredient.trim()}
+                            </span>
+                          ))}
+                          {template.ingredients.split(',').length > 4 && (
+                            <span className="px-2 py-0.5 text-xs text-[#9C9C9C]">
+                              +{template.ingredients.split(',').length - 4} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Plus className="w-5 h-5 text-[#5FB3A6] flex-shrink-0 mt-1" />
+                    </div>
+                  </button>
+                );
+              })}
+              
+              {searchQuery && searchResults.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-[#6F6F6F]">No meals found matching "{searchQuery}"</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Recipe Modal */}
+      {showRecipeModal && selectedMeal && (
+        <MealRecipeModal
+          meal={selectedMeal}
+          onClose={() => setShowRecipeModal(false)}
+        />
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabase';
 import { api } from '../utils/api';
 import CountrySetupModal from '../components/CountrySetupModal';
+import { LiquidGlassLogo } from '../components/LiquidGlassLogo';
 
 export default function RootLayout() {
   const navigate = useNavigate();
@@ -114,9 +115,7 @@ export default function RootLayout() {
       <nav className="hidden md:block fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-gray-200 shadow-sm">
         <div className="p-6">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-[#F26B5E] rounded-xl flex items-center justify-center text-white font-bold text-xl">
-              N
-            </div>
+            <LiquidGlassLogo size={40} />
             <div>
               <h1 className="text-lg font-bold text-[#2F2F2F]">Naya</h1>
               <p className="text-xs text-[#6F6F6F]">Dream Home</p>

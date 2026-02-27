@@ -79,16 +79,16 @@ export default function HouseholdPage() {
       </div>
 
       {members.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {members.map((member) => (
             <div key={member.id} className="bg-white rounded-[20px] p-6 shadow-sm">
-              <div className="flex items-start gap-4">
+              <div className="flex flex-col items-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#F26B5E] to-[#5FB3A6] flex items-center justify-center text-3xl shadow-md">
                   {member.emojiAvatar}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
+                <div className="text-center flex-1 w-full">
+                  <div className="flex items-center justify-center mb-2">
+                    <div className="flex-1 text-center">
                       <h3 className="font-bold text-[#2F2F2F]">{member.name}</h3>
                       <p className="text-sm text-[#6F6F6F]">{member.age} years old</p>
                     </div>
@@ -99,7 +99,7 @@ export default function HouseholdPage() {
                       <Trash2 className="w-4 h-4 text-red-600" />
                     </button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 justify-center">
                     <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
                       {member.role.replace('_', ' ')}
                     </span>

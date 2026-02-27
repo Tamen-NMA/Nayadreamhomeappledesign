@@ -79,6 +79,7 @@ export interface User {
   email: string;
   displayName: string;
   country?: string;
+  avatarUrl?: string;
   dietaryRestrictions: string[];
   cuisinePreferences: string[];
   currentPlan: 'free' | 'pro' | 'family';

@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Plus, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Plus, ChevronRight, ChevronLeft, BookOpen } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Progress } from '../components/ui/progress';
 import CountrySetupModal from '../components/CountrySetupModal';
+import RecipeModal from '../components/RecipeModal';
 import { api } from '../utils/api';
 import { supabase } from '../utils/supabase';
 import type { ChoreSchedule, MealPlan, HouseholdMember } from '../types';
 import type { CountryCode } from '../data/countries';
 import { MEAL_TYPE_GRADIENTS, MEAL_TYPE_LABELS } from '../types';
+import type { Meal, Recipe } from '../types';
 import { toast } from 'sonner';
 import { MOCK_MEMBERS, MOCK_CHORE_SCHEDULE, MOCK_MEAL_PLANS, getMealEmoji } from '../data/mock-kenya';
+import userAvatar from 'figma:asset/7d2cbe39d65ddd8a893619b55268255395c97d20.png';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -21,33 +24,30 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
   const [showCountrySetup, setShowCountrySetup] = useState(false);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string>(userAvatar);
 
   useEffect(() => {
-    loadData();
+    checkAuthAndLoadData();
   }, []);
 
-  async function loadData() {
+  async function checkAuthAndLoadData() {
     try {
-      // Get current session to check auth status
+      // Check if user is authenticated
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
-        // No session - redirect to sign in
         console.log('No active session, redirecting to sign in');
         navigate('/signin');
         return;
       }
-      
-      setUser(session.user);
+
+      // User is authenticated, load data
       await loadUserData();
     } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-      // Fall back to mock data on error
-      setChoreSchedules([MOCK_CHORE_SCHEDULE]);
-      setMealPlans(MOCK_MEAL_PLANS);
-      setMembers(MOCK_MEMBERS);
-    } finally {
-      setLoading(false);
+      console.error('Auth check failed:', error);
+      navigate('/signin');
     }
   }
 
@@ -61,6 +61,11 @@ export default function Dashboard() {
       
       if (!userData?.country) {
         setShowCountrySetup(true);
+      }
+
+      // Set avatar URL if available
+      if (userData?.avatarUrl) {
+        setAvatarUrl(userData.avatarUrl);
       }
 
       const [choresData, mealsData, membersData] = await Promise.all([
@@ -78,6 +83,8 @@ export default function Dashboard() {
       setChoreSchedules([MOCK_CHORE_SCHEDULE]);
       setMealPlans(MOCK_MEAL_PLANS);
       setMembers(MOCK_MEMBERS);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -95,7 +102,7 @@ export default function Dashboard() {
       
       // 3. Write default chore schedule to database (app-side defaults)
       toast.info('Setting up your chore schedules...');
-      const { id, ...choreScheduleData } = MOCK_CHORE_SCHEDULE; // Remove id, let backend generate it
+      const { id, ...choreScheduleData} = MOCK_CHORE_SCHEDULE; // Remove id, let backend generate it
       await api.createChoreSchedule(choreScheduleData);
       
       // 4. Write default household members to database
@@ -113,6 +120,34 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Failed to save country:', error);
       toast.error('Failed to save country');
+    }
+  }
+
+  async function handleSaveRecipe(recipe: Recipe) {
+    if (!selectedMeal || !activeMealPlan) return;
+    
+    try {
+      // Update the meal with the recipe
+      const updatedMeals = activeMealPlan.meals.map(m =>
+        m.id === selectedMeal.id ? { ...m, recipe } : m
+      );
+      
+      const updatedMealPlan = {
+        ...activeMealPlan,
+        meals: updatedMeals,
+      };
+      
+      await api.updateMealPlan(activeMealPlan.id, updatedMealPlan);
+      
+      // Update local state
+      setMealPlans(mealPlans.map(mp =>
+        mp.id === activeMealPlan.id ? updatedMealPlan : mp
+      ));
+      
+      toast.success('Recipe saved successfully!');
+    } catch (error) {
+      console.error('Failed to save recipe:', error);
+      toast.error('Failed to save recipe');
     }
   }
 
@@ -164,25 +199,25 @@ export default function Dashboard() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        {user?.user_metadata?.avatar_url && (
+        <div className="relative">
           <img
-            src={user.user_metadata.avatar_url}
+            src={avatarUrl}
             alt="Profile"
-            className="w-12 h-12 rounded-full border-2 border-[#F26B5E]"
+            className="w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-[0_4px_16px_0_rgba(0,0,0,0.08)] border-2 border-white/80 hover:scale-105 transition-transform cursor-pointer"
           />
-        )}
+        </div>
       </div>
 
       {/* Week Calendar */}
-      <div className="bg-white rounded-[20px] p-3 sm:p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-4 gap-0.5 sm:gap-1">
+      <div className="py-2 sm:py-3">
+        <div className="flex items-center justify-center gap-2">
           <button
             onClick={() => setWeekOffset(weekOffset - 1)}
-            className="p-1 sm:p-1.5 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
+            className="p-1 hover:bg-gray-100 rounded transition-colors"
           >
-            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 text-[#6F6F6F]" />
+            <ChevronLeft className="w-5 h-5 text-gray-400" />
           </button>
-          <div className="flex items-center gap-0.5 sm:gap-1 flex-1 justify-center">
+          <div className="flex gap-1 sm:gap-2">
             {weekDates.map((date, index) => {
               const isToday = date.toDateString() === new Date().toDateString();
               const dayName = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
@@ -190,27 +225,34 @@ export default function Dashboard() {
               return (
                 <button
                   key={index}
-                  className={`flex flex-col items-center justify-center w-9 sm:w-12 h-12 sm:h-16 rounded-xl sm:rounded-2xl transition-all ${
+                  className={`w-10 sm:w-12 h-14 sm:h-16 rounded-full flex flex-col items-center justify-center transition-all duration-300 ${
                     isToday
-                      ? 'bg-[#F26B5E] text-white shadow-md'
-                      : 'hover:bg-gray-100 text-[#2F2F2F]'
+                      ? "text-white shadow-lg shadow-[#F26B5E]/30"
+                      : "bg-white text-gray-600 hover:bg-gray-50 shadow-sm border border-gray-100"
                   }`}
+                  style={
+                    isToday
+                      ? {
+                          background: "linear-gradient(135deg, rgba(242, 107, 94, 0.95) 0%, rgba(255, 154, 139, 0.95) 100%)",
+                          backdropFilter: "blur(10px)",
+                          WebkitBackdropFilter: "blur(10px)",
+                          border: "1.5px solid rgba(255, 255, 255, 0.3)",
+                          boxShadow: "0 8px 32px 0 rgba(242, 107, 94, 0.25), inset 0 1px 0 0 rgba(255, 255, 255, 0.3)",
+                        }
+                      : {}
+                  }
                 >
-                  <span className={`text-[10px] sm:text-xs font-medium mb-0.5 ${isToday ? 'text-white/80' : 'text-[#6F6F6F]'}`}>
-                    {dayName}
-                  </span>
-                  <span className={`text-sm sm:text-lg font-bold ${isToday ? 'text-white' : 'text-[#2F2F2F]'}`}>
-                    {date.getDate()}
-                  </span>
+                  <span className={`text-xs mb-1 ${isToday ? 'text-white' : 'text-gray-500'}`}>{dayName}</span>
+                  <span className={`text-sm font-semibold ${isToday ? 'text-white' : 'text-gray-800'}`}>{date.getDate()}</span>
                 </button>
               );
             })}
           </div>
           <button
             onClick={() => setWeekOffset(weekOffset + 1)}
-            className="p-1 sm:p-1.5 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
+            className="p-1 hover:bg-gray-100 rounded transition-colors"
           >
-            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-[#6F6F6F]" />
+            <ChevronRight className="w-5 h-5 text-gray-400" />
           </button>
         </div>
       </div>
@@ -218,7 +260,7 @@ export default function Dashboard() {
       {/* Today's Chores Card */}
       <div className="bg-white rounded-[20px] p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-[#2F2F2F]">Today's Chores</h2>
+          <h2 className="text-2xl font-serif text-gray-900">Today's Chores</h2>
           <button
             onClick={() => activeSchedule ? navigate(`/chores/${activeSchedule.id}`) : navigate('/chores')}
             className="text-[#F26B5E] text-sm font-semibold hover:underline"
@@ -309,7 +351,7 @@ export default function Dashboard() {
       {/* Today's Meals Card */}
       <div className="bg-white rounded-[20px] p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-[#2F2F2F]">Today's Meals</h2>
+          <h2 className="text-2xl font-serif text-gray-900">Today's Meals</h2>
           <button
             onClick={() => activeMealPlan ? navigate(`/meals/${activeMealPlan.id}`) : navigate('/meals')}
             className="text-[#F26B5E] text-sm font-semibold hover:underline"
@@ -323,8 +365,11 @@ export default function Dashboard() {
             {todaysMeals.map((meal) => (
               <div
                 key={meal.id}
-                className="flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-[#F26B5E] transition-all cursor-pointer"
-                onClick={() => navigate(`/meals/${activeMealPlan!.id}`)}
+                className="flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-[#F26B5E] transition-all cursor-pointer group"
+                onClick={() => {
+                  setSelectedMeal(meal);
+                  setShowRecipeModal(true);
+                }}
               >
                 <div className={`w-1 h-16 rounded-full bg-gradient-to-b ${MEAL_TYPE_GRADIENTS[meal.type]}`} />
                 <div className="flex-1">
@@ -332,11 +377,22 @@ export default function Dashboard() {
                     <span className="text-xs font-semibold text-[#6F6F6F] uppercase">
                       {MEAL_TYPE_LABELS[meal.type]}
                     </span>
+                    {meal.recipe && (
+                      <div className="flex items-center gap-1 text-xs text-[#5FB3A6] font-medium">
+                        <BookOpen className="w-3 h-3" />
+                        <span>Recipe</span>
+                      </div>
+                    )}
                   </div>
                   <h3 className="font-bold text-[#2F2F2F] mb-1">{meal.name}</h3>
                   <div className="flex items-center gap-4 text-xs text-[#6F6F6F]">
                     {meal.calories && <span>{meal.calories} cal</span>}
                     {meal.prepTime && <span>{meal.prepTime} min</span>}
+                    {!meal.recipe && (
+                      <span className="text-[#F26B5E] font-medium group-hover:underline">
+                        Add Recipe
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -356,20 +412,20 @@ export default function Dashboard() {
       </div>
 
       {/* Household Members */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Household Header Widget */}
         <button
           onClick={() => navigate('/household')}
-          className="bg-gradient-to-br from-[#F26B5E] to-[#e05a4e] rounded-[20px] aspect-square p-6 text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-between"
+          className="bg-gradient-to-br from-[#F26B5E] to-[#e05a4e] rounded-[20px] aspect-square p-6 md:p-4 text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-between"
         >
           <div className="flex items-center justify-between">
-            <div className="text-5xl">
+            <div className="text-5xl md:text-4xl">
               🏠
             </div>
-            <ChevronRight className="w-5 h-5 text-white/80 group-hover:translate-x-1 transition-transform" />
+            <ChevronRight className="w-5 h-5 md:w-4 md:h-4 text-white/80 group-hover:translate-x-1 transition-transform" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white mb-1">Household</h3>
+            <h3 className="text-lg md:text-base font-bold text-white mb-1">Household</h3>
             <p className="text-white/80 text-xs">Manage members</p>
           </div>
         </button>
@@ -378,28 +434,28 @@ export default function Dashboard() {
           <button
             key={member.id}
             onClick={() => navigate('/household')}
-            className="bg-gradient-to-br from-purple-400 to-purple-500 rounded-[20px] aspect-square p-6 text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-between"
+            className="bg-gradient-to-br from-purple-400 to-purple-500 rounded-[20px] aspect-square p-6 md:p-4 text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-between"
           >
             <div className="flex items-center justify-between">
-              <div className="text-5xl">
+              <div className="text-5xl md:text-4xl">
                 {member.emojiAvatar}
               </div>
-              <ChevronRight className="w-5 h-5 text-white/80 group-hover:translate-x-1 transition-transform" />
+              <ChevronRight className="w-5 h-5 md:w-4 md:h-4 text-white/80 group-hover:translate-x-1 transition-transform" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white mb-1">{member.name}</h3>
+              <h3 className="text-lg md:text-base font-bold text-white mb-1">{member.name}</h3>
               <p className="text-white/80 text-xs capitalize">{member.role}</p>
             </div>
           </button>
         ))}
         <button
           onClick={() => navigate('/household')}
-          className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-[20px] aspect-square p-6 text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-center items-center"
+          className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-[20px] aspect-square p-6 md:p-4 text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-center items-center"
         >
-          <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-[#F26B5E] mb-3">
-            <Plus className="w-8 h-8" />
+          <div className="w-16 h-16 md:w-12 md:h-12 rounded-full bg-white flex items-center justify-center text-[#F26B5E] mb-3 md:mb-2">
+            <Plus className="w-8 h-8 md:w-6 md:h-6" />
           </div>
-          <h3 className="text-lg font-bold text-[#2F2F2F]">Add Member</h3>
+          <h3 className="text-lg md:text-base font-bold text-[#2F2F2F]">Add Member</h3>
         </button>
       </div>
 
@@ -407,32 +463,32 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4">
         <button
           onClick={() => navigate('/chores')}
-          className="bg-gradient-to-br from-teal-400 to-emerald-500 rounded-[20px] aspect-square p-6 text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-between"
+          className="bg-gradient-to-br from-teal-400 to-emerald-500 rounded-[20px] aspect-square p-6 md:p-4 md:max-w-[160px] text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-between"
         >
           <div className="flex items-center justify-between">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
-              <Plus className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 md:w-10 md:h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+              <Plus className="w-6 h-6 md:w-5 md:h-5 text-white" />
             </div>
-            <ChevronRight className="w-5 h-5 text-white/80 group-hover:translate-x-1 transition-transform" />
+            <ChevronRight className="w-5 h-5 md:w-4 md:h-4 text-white/80 group-hover:translate-x-1 transition-transform" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white mb-1">New Chore</h3>
+            <h3 className="text-lg md:text-base font-bold text-white mb-1">New Chore</h3>
             <p className="text-white/80 text-xs">Organize tasks</p>
           </div>
         </button>
 
         <button
           onClick={() => navigate('/meals')}
-          className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-[20px] aspect-square p-6 text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-between"
+          className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-[20px] aspect-square p-6 md:p-4 md:max-w-[160px] text-left shadow-lg hover:shadow-xl transition-shadow group flex flex-col justify-between"
         >
           <div className="flex items-center justify-between">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
-              <Plus className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 md:w-10 md:h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+              <Plus className="w-6 h-6 md:w-5 md:h-5 text-white" />
             </div>
-            <ChevronRight className="w-5 h-5 text-white/80 group-hover:translate-x-1 transition-transform" />
+            <ChevronRight className="w-5 h-5 md:w-4 md:h-4 text-white/80 group-hover:translate-x-1 transition-transform" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white mb-1">New Meal</h3>
+            <h3 className="text-lg md:text-base font-bold text-white mb-1">New Meal</h3>
             <p className="text-white/80 text-xs">Plan meals</p>
           </div>
         </button>
@@ -444,6 +500,17 @@ export default function Dashboard() {
           isOpen={showCountrySetup}
           onClose={() => setShowCountrySetup(false)}
           onSelectCountry={handleSelectCountry}
+        />
+      )}
+
+      {/* Recipe Modal */}
+      {showRecipeModal && selectedMeal && (
+        <RecipeModal
+          isOpen={showRecipeModal}
+          onClose={() => setShowRecipeModal(false)}
+          mealName={selectedMeal.name}
+          recipe={selectedMeal.recipe}
+          onSave={handleSaveRecipe}
         />
       )}
     </div>

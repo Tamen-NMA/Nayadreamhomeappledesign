@@ -202,6 +202,86 @@ app.post("/make-server-ba08a5a4/user/country", async (c) => {
   }
 });
 
+app.post("/make-server-ba08a5a4/user/avatar", async (c) => {
+  console.log('🖼️ Avatar upload endpoint called');
+  
+  const user = await verifyAuth(c.req.header('Authorization'));
+  if (!user) {
+    console.log('🖼️ User verification failed, returning 401');
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    // Ensure the avatars bucket exists
+    const bucketName = 'make-ba08a5a4-avatars';
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
+    
+    if (!bucketExists) {
+      console.log(`🖼️ Creating bucket: ${bucketName}`);
+      const { error: bucketError } = await supabase.storage.createBucket(bucketName, {
+        public: false,
+        fileSizeLimit: 2097152, // 2MB
+        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'],
+      });
+      if (bucketError) {
+        console.error('🖼️ Failed to create bucket:', bucketError);
+        throw bucketError;
+      }
+    }
+
+    // Parse the form data
+    const formData = await c.req.formData();
+    const file = formData.get('avatar') as File;
+    
+    if (!file) {
+      return c.json({ error: 'No file provided' }, 400);
+    }
+
+    console.log(`🖼️ Uploading avatar for user ${user.id}, file size: ${file.size} bytes`);
+
+    // Generate unique filename
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+    // Upload to Supabase Storage
+    const arrayBuffer = await file.arrayBuffer();
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .upload(fileName, arrayBuffer, {
+        contentType: file.type,
+        upsert: true,
+      });
+
+    if (error) {
+      console.error('🖼️ Upload error:', error);
+      throw error;
+    }
+
+    // Create signed URL (valid for 1 year)
+    const { data: signedUrl } = await supabase.storage
+      .from(bucketName)
+      .createSignedUrl(fileName, 31536000); // 1 year in seconds
+
+    if (!signedUrl) {
+      throw new Error('Failed to create signed URL');
+    }
+
+    const avatarUrl = signedUrl.signedUrl;
+    console.log(`🖼️ Avatar uploaded successfully: ${avatarUrl.substring(0, 50)}...`);
+
+    // Update user record with avatar URL
+    const existing = await kv.get(`user:${user.id}`) || {};
+    const updated = { ...existing, id: user.id, email: user.email, avatarUrl };
+    await kv.set(`user:${user.id}`, updated);
+
+    return c.json({ avatarUrl });
+  } catch (error: any) {
+    console.error('🖼️ Avatar upload error:', error);
+    return c.json({ error: error.message || 'Failed to upload avatar' }, 500);
+  }
+});
+
 // ===== HOUSEHOLD MEMBERS ROUTES =====
 
 app.get("/make-server-ba08a5a4/members", async (c) => {

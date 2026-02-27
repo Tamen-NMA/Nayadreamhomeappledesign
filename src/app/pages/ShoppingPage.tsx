@@ -1,9 +1,36 @@
-import { useState } from 'react';
-import { ShoppingCart, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ShoppingCart, Check, ChevronDown } from 'lucide-react';
 import { KENYA_SHOPPING_LIST, SHOPPING_CATEGORIES } from '../data/shopping';
+import { api } from '../utils/api';
+import type { MealPlan } from '../types';
 
 export default function ShoppingPage() {
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadMealPlans();
+  }, []);
+
+  async function loadMealPlans() {
+    try {
+      const plans = await api.getMealPlans().catch(() => []);
+      setMealPlans(plans);
+      if (plans.length > 0) {
+        setSelectedPlanId(plans[0].id);
+      }
+    } catch (error) {
+      console.error('Failed to load meal plans:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const resetCheckedItems = () => {
+    setCheckedItems(new Set());
+  };
 
   const toggleItem = (itemId: string) => {
     const newChecked = new Set(checkedItems);
@@ -22,11 +49,55 @@ export default function ShoppingPage() {
   const totalItems = KENYA_SHOPPING_LIST.length;
   const checkedCount = checkedItems.size;
   const progressPercent = (checkedCount / totalItems) * 100;
+  
+  // Calculate total costs
+  const totalCost = KENYA_SHOPPING_LIST.reduce((sum, item) => sum + item.price, 0);
+  const checkedCost = KENYA_SHOPPING_LIST
+    .filter(item => checkedItems.has(item.id))
+    .reduce((sum, item) => sum + item.price, 0);
+  const remainingCost = totalCost - checkedCost;
+  
+  // Get selected meal plan
+  const selectedPlan = mealPlans.find(plan => plan.id === selectedPlanId);
+  const totalMeals = selectedPlan?.meals?.length || 0;
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-4xl pb-24">
       {/* Header */}
-      <h1 className="text-3xl font-bold text-[#2F2F2F]">Shopping List</h1>
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-3xl font-bold text-[#2F2F2F]">Shopping List</h1>
+          <button
+            onClick={resetCheckedItems}
+            className="hidden md:block text-sm font-semibold text-[#F26B5E] hover:text-[#d95a4f] transition-colors"
+          >
+            Reset
+          </button>
+        </div>
+        <p className="text-sm text-[#6F6F6F] mb-4">
+          Auto-generated from your meal plan ingredients
+        </p>
+        
+        {/* Meal Plan Selector - Desktop Only */}
+        {mealPlans.length > 0 && (
+          <div className="hidden md:block">
+            <div className="relative">
+              <select
+                value={selectedPlanId}
+                onChange={(e) => setSelectedPlanId(e.target.value)}
+                className="w-full bg-white rounded-2xl px-6 py-4 pr-12 appearance-none border-0 shadow-sm font-semibold text-[#2F2F2F] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#5FB3A6]"
+              >
+                {mealPlans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.title} ({plan.meals?.length || 0} meals)
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6F6F6F] pointer-events-none" />
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Progress Card */}
       <div className="bg-gradient-to-r from-[#5FB3A6] to-[#4fa396] rounded-[20px] p-6 shadow-lg text-white">
@@ -96,11 +167,18 @@ export default function ShoppingPage() {
 
                       {/* Item Info */}
                       <div className="flex-1">
-                        <p className={`font-semibold text-[#2F2F2F] ${
-                          isChecked ? 'line-through opacity-50' : ''
-                        }`}>
-                          {item.name}
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className={`font-semibold text-[#2F2F2F] ${
+                            isChecked ? 'line-through opacity-50' : ''
+                          }`}>
+                            {item.name}
+                          </p>
+                          <p className={`font-bold text-[#F26B5E] ${
+                            isChecked ? 'line-through opacity-50' : ''
+                          }`}>
+                            KES {item.price}
+                          </p>
+                        </div>
                         {item.usedIn.length > 0 && (
                           <p className={`text-sm text-[#6F6F6F] mt-1 ${
                             isChecked ? 'opacity-50' : ''
@@ -120,9 +198,39 @@ export default function ShoppingPage() {
 
       {/* Summary Card */}
       <div className="bg-[#FAF7F2] rounded-[20px] p-6">
-        <h3 className="font-semibold text-[#2F2F2F] mb-2">Summary</h3>
-        <p className="text-sm text-[#6F6F6F]">
-          {totalItems} total items · {checkedCount} checked off · From plan: Kenya Weekly Plan
+        <h3 className="font-semibold text-[#2F2F2F] mb-4">Shopping Summary</h3>
+        
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-[#6F6F6F]">Total Items</p>
+            <p className="font-bold text-[#2F2F2F]">{totalItems}</p>
+          </div>
+          
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-[#6F6F6F]">Checked Off</p>
+            <p className="font-bold text-[#5FB3A6]">{checkedCount}</p>
+          </div>
+          
+          <div className="border-t-2 border-gray-200 pt-3 mt-3">
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm text-[#6F6F6F]">Total Cost</p>
+              <p className="font-bold text-[#2F2F2F]">KES {totalCost.toLocaleString()}</p>
+            </div>
+            
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm text-[#6F6F6F]">In Cart</p>
+              <p className="font-bold text-[#5FB3A6]">KES {checkedCost.toLocaleString()}</p>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-[#6F6F6F]">Remaining</p>
+              <p className="font-bold text-[#F26B5E]">KES {remainingCost.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+        
+        <p className="text-xs text-[#6F6F6F] mt-4 text-center">
+          From plan: {selectedPlan?.title || 'Kenya Weekly Plan'}
         </p>
       </div>
     </div>

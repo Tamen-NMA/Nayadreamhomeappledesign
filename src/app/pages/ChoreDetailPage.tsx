@@ -153,9 +153,9 @@ export default function ChoreDetailPage() {
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-4xl">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 mb-6">
         <button
-          onClick={() => navigate('/chores')}
+          onClick={() => navigate('/chores?list=true')}
           className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center hover:shadow-md transition-shadow"
         >
           <ArrowLeft className="w-5 h-5 text-[#2F2F2F]" />

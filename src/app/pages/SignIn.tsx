@@ -1,98 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Calendar, Sparkles, ListChecks, Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { supabase } from '../utils/supabase';
 import { api } from '../utils/api';
+import svgPaths from '../../imports/svg-vspingldlx';
 
 export default function SignIn() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-
-  async function handleEmailSignIn() {
-    if (!email || !password) {
-      toast.error('Please enter email and password');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        // If invalid credentials, suggest signing up
-        if (error.message.includes('Invalid login credentials')) {
-          toast.error('Invalid email or password. Don\'t have an account? Click "Sign up" below.');
-        } else {
-          throw error;
-        }
-        return;
-      }
-
-      if (data.session) {
-        toast.success('Welcome back!');
-        navigate('/');
-      }
-    } catch (error: any) {
-      console.error('Email sign in error:', error);
-      toast.error(error.message || 'Failed to sign in');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleEmailSignUp() {
-    if (!email || !password || !displayName) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Call the backend signup endpoint
-      const data = await api.signUp(email, password, displayName);
-      console.log('User created on backend:', data.user?.id);
-      toast.success('Account created! Signing you in...');
-
-      // Wait a moment for the user to be fully created
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Now sign in with the new account
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) {
-        console.error('Sign in error after signup:', signInError);
-        throw signInError;
-      }
-
-      if (signInData.session) {
-        toast.success('Welcome to Naya Dream Home!');
-        navigate('/');
-      }
-    } catch (error: any) {
-      console.error('Sign up error:', error);
-      toast.error(error.message || 'Failed to create account');
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleAppleSignIn() {
     setLoading(true);
@@ -138,185 +56,258 @@ export default function SignIn() {
     }
   }
 
+  async function handleEmailSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.session) {
+        toast.success('Signed in successfully!');
+        navigate('/');
+      }
+    } catch (error: any) {
+      console.error('Email sign in error:', error);
+      toast.error(error.message || 'Failed to sign in');
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-[#FAF7F2] flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo and Branding */}
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-[#F26B5E] to-[#5FB3A6] rounded-3xl mx-auto mb-4 flex items-center justify-center shadow-lg">
-            <span className="text-4xl text-white font-bold">N</span>
+    <div className="relative w-full h-screen overflow-hidden bg-white">
+      {/* Background Gradient Container */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div 
+          className="absolute w-full h-full"
+          style={{ 
+            backgroundImage: "linear-gradient(114.785deg, rgb(249, 250, 251) 0%, rgb(255, 255, 255) 50%, rgb(243, 244, 246) 100%)" 
+          }}
+        >
+          {/* Rotated gradient overlay */}
+          <div 
+            className="absolute top-0 left-0 w-[513px] h-[972px] flex items-center justify-center"
+            style={{ transform: "rotate(4.99deg)", transformOrigin: "center" }}
+          >
+            <div 
+              className="w-[433px] h-[938px] opacity-30"
+              style={{ 
+                backgroundImage: `url('data:image/svg+xml;utf8,<svg viewBox="0 0 433.29 938.07" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"><rect x="0" y="0" height="100%" width="100%" fill="url(%23grad)" opacity="1"/><defs><radialGradient id="grad" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="10" gradientTransform="matrix(0 -61.388 -53.73 0 86.659 469.04)"><stop stop-color="rgba(242,107,94,0.3)" offset="0"/><stop stop-color="rgba(121,54,47,0.15)" offset="0.25"/><stop stop-color="rgba(0,0,0,0)" offset="0.5"/></radialGradient></defs></svg>'), url('data:image/svg+xml;utf8,<svg viewBox="0 0 433.29 938.07" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"><rect x="0" y="0" height="100%" width="100%" fill="url(%23grad)" opacity="1"/><defs><radialGradient id="grad" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="10" gradientTransform="matrix(0 -84.855 -74.269 0 346.64 750.46)"><stop stop-color="rgba(95,179,166,0.3)" offset="0"/><stop stop-color="rgba(48,90,83,0.15)" offset="0.25"/><stop stop-color="rgba(0,0,0,0)" offset="0.5"/></radialGradient></defs></svg>'), url('data:image/svg+xml;utf8,<svg viewBox="0 0 433.29 938.07" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"><rect x="0" y="0" height="100%" width="100%" fill="url(%23grad)" opacity="1"/><defs><radialGradient id="grad" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="10" gradientTransform="matrix(0 -80.71 -70.642 0 173.32 187.61)"><stop stop-color="rgba(242,107,94,0.2)" offset="0"/><stop stop-color="rgba(121,54,47,0.1)" offset="0.25"/><stop stop-color="rgba(0,0,0,0)" offset="0.5"/></radialGradient></defs></svg>')`
+              }}
+            />
           </div>
-          <h1 className="text-3xl font-bold text-[#F26B5E] mb-2">
-            Naya Dream Home
-          </h1>
-          <p className="text-[#6F6F6F] text-sm">
-            Your Home, Beautifully Organized
+        </div>
+
+        {/* Blur orbs */}
+        <div 
+          className="absolute w-[360px] h-[360px] rounded-full opacity-20 blur-[64px] top-[110px] left-[19px]"
+          style={{ backgroundImage: "linear-gradient(135deg, rgb(242, 107, 94) 0%, rgb(255, 154, 139) 100%)" }}
+        />
+        <div 
+          className="absolute w-[352px] h-[352px] rounded-full opacity-20 blur-[64px] top-[466px] left-[48px]"
+          style={{ backgroundImage: "linear-gradient(135deg, rgb(95, 179, 166) 0%, rgb(125, 211, 192) 100%)" }}
+        />
+        <div 
+          className="absolute w-[279px] h-[279px] rounded-full opacity-15 blur-[40px] top-[516px] left-[133px]"
+          style={{ backgroundImage: "linear-gradient(135deg, rgb(242, 107, 94) 0%, rgb(95, 179, 166) 100%)" }}
+        />
+
+        {/* Floating dots */}
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(242,107,94,0.4)] opacity-20 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[850px] left-[83px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(95,179,166,0.4)] opacity-85 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[761px] left-[297px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(242,107,94,0.4)] opacity-20 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[698px] left-[231px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(95,179,166,0.4)] opacity-90 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[372px] left-[155px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(242,107,94,0.4)] opacity-20 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[753px] left-[385px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(95,179,166,0.4)] opacity-48 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[176px] left-[53px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(242,107,94,0.4)] opacity-30 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[103px] left-[236px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(95,179,166,0.4)] opacity-22 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[625px] left-[309px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(242,107,94,0.4)] opacity-83 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[27px] left-[53px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(95,179,166,0.4)] opacity-25 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[35px] left-[168px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(242,107,94,0.4)] opacity-69 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[14px] left-[197px]" />
+        <div className="absolute w-3 h-3 rounded-full bg-[rgba(95,179,166,0.4)] opacity-41 shadow-[0px_0px_20px_0px_rgba(255,255,255,0.5)] top-[513px] left-[298px]" />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col items-center justify-between h-full px-6 py-8 max-w-md mx-auto">
+        {/* Hero Section with App Icon */}
+        <div className="flex flex-col items-center justify-center flex-1 w-full">
+          {/* App Icon */}
+          <div className="relative mb-12 mt-20">
+            {/* Background blur */}
+            <div 
+              className="absolute w-[124px] h-[124px] rounded-[24px] opacity-40 blur-[40px] top-0 left-0"
+              style={{ backgroundImage: "linear-gradient(135deg, rgb(242, 107, 94) 0%, rgb(95, 179, 166) 50%, rgb(242, 107, 94) 100%)" }}
+            />
+            
+            {/* Icon Container */}
+            <div 
+              className="relative w-[106px] h-[106px] rounded-[24px] border border-[rgba(255,255,255,0.3)] shadow-[0px_8px_32px_0px_rgba(242,107,94,0.2)] overflow-hidden"
+              style={{ 
+                backgroundImage: "linear-gradient(135deg, rgba(242, 107, 94, 0.4) 0%, rgba(95, 179, 166, 0.4) 100%)",
+                boxShadow: "inset 0px 1px 0px 0px rgba(255,255,255,0.5), 0px 8px 32px 0px rgba(242,107,94,0.2)"
+              }}
+            >
+              {/* Gradient overlay effects */}
+              <div 
+                className="absolute w-[101px] h-[101px] top-0 left-[43px] opacity-71"
+                style={{ backgroundImage: "linear-gradient(45deg, rgba(0, 0, 0, 0) 30%, rgba(255, 255, 255, 0.3) 50%, rgba(0, 0, 0, 0) 70%)" }}
+              />
+              <div className="absolute w-[53px] h-[53px] rounded-full bg-[rgba(242,107,94,0.6)] blur-[24px] opacity-60 top-[-23px] left-[73px]" />
+              <div className="absolute w-[38px] h-[38px] rounded-full bg-[rgba(95,179,166,0.6)] blur-[24px] opacity-60 top-[77px] left-[-12px]" />
+              
+              {/* Home Icon */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="relative w-[50px] h-[50px]">
+                  <svg className="w-full h-full" fill="none" viewBox="0 0 58.4445 60.5139">
+                    <g filter="url(#filter0_d_11_1141)">
+                      <path d={svgPaths.p4d9f0c0} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="5.17616" />
+                      <path d={svgPaths.p1e390900} stroke="white" strokeLinecap="round" strokeLinejoin="round" strokeWidth="5.17616" />
+                    </g>
+                    <defs>
+                      <filter colorInterpolationFilters="sRGB" filterUnits="userSpaceOnUse" height="65.6911" id="filter0_d_11_1141" width="65.6911" x="-3.62331" y="-1.55392">
+                        <feFlood floodOpacity="0" result="BackgroundImageFix" />
+                        <feColorMatrix in="SourceAlpha" result="hardAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" />
+                        <feOffset dy="4" />
+                        <feGaussianBlur stdDeviation="4" />
+                        <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.15 0" />
+                        <feBlend in2="BackgroundImageFix" mode="normal" result="effect1_dropShadow_11_1141" />
+                        <feBlend in="SourceGraphic" in2="effect1_dropShadow_11_1141" mode="normal" result="shape" />
+                      </filter>
+                    </defs>
+                  </svg>
+                </div>
+              </div>
+              
+              {/* Top gradient */}
+              <div 
+                className="absolute top-0 left-0 right-0 h-[35px] rounded-tl-[24px] rounded-tr-[24px]"
+                style={{ backgroundImage: "linear-gradient(to bottom, rgba(255,255,255,0.4), rgba(0,0,0,0))" }}
+              />
+              {/* Bottom gradient */}
+              <div 
+                className="absolute bottom-0 left-0 right-0 h-[26px] rounded-bl-[24px] rounded-br-[24px]"
+                style={{ backgroundImage: "linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.2))" }}
+              />
+            </div>
+          </div>
+
+          {/* Headline */}
+          <div className="text-center mb-8">
+            <h1 className="text-[36px] font-bold leading-[45px] text-[#101828] tracking-[0.37px] mb-2">
+              Manage your home,
+            </h1>
+            <p 
+              className="text-[36px] font-bold leading-[45px] tracking-[0.37px] bg-clip-text text-transparent"
+              style={{ backgroundImage: "linear-gradient(90deg, rgb(242, 107, 94) 0%, rgb(95, 179, 166) 100%)" }}
+            >
+              effortlessly
+            </p>
+          </div>
+
+          {/* Subtitle */}
+          <p className="text-center text-[16px] font-medium leading-[26px] text-[#364153] tracking-[-0.31px] max-w-[323px]">
+            Plan meals, track chores, and organize your household
           </p>
         </div>
 
-        {/* Auth Card */}
-        <div className="bg-white rounded-[20px] p-8 shadow-lg mb-6">
-          <h2 className="text-xl font-semibold text-[#2F2F2F] mb-3 text-center">
-            {isSignUp ? 'Create your account' : 'Sign in to continue'}
-          </h2>
-          <p className="text-[#6F6F6F] text-sm mb-6 text-center">
-            {isSignUp ? 'Fill in your details to get started' : 'Choose your preferred sign in method'}
-          </p>
-
-          {/* Email/Password Form */}
-          <div className="space-y-4 mb-6">
-            {isSignUp && (
-              <div>
-                <label className="block text-sm font-medium text-[#2F2F2F] mb-2">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 focus:border-[#F26B5E] focus:outline-none transition-colors"
-                />
-              </div>
-            )}
-            
-            <div>
-              <label className="block text-sm font-medium text-[#2F2F2F] mb-2">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6F6F6F]" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  className="w-full h-12 pl-12 pr-4 rounded-2xl border-2 border-gray-200 focus:border-[#F26B5E] focus:outline-none transition-colors"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-[#2F2F2F] mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6F6F6F]" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={isSignUp ? 'Create a password (min 6 characters)' : 'Enter your password'}
-                  className="w-full h-12 pl-12 pr-12 rounded-2xl border-2 border-gray-200 focus:border-[#F26B5E] focus:outline-none transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6F6F6F] hover:text-[#2F2F2F]"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            <Button
-              onClick={isSignUp ? handleEmailSignUp : handleEmailSignIn}
-              disabled={loading}
-              className="w-full h-12 bg-[#F26B5E] hover:bg-[#e05a4e] text-white rounded-2xl font-semibold"
-            >
-              {loading ? 'Please wait...' : (isSignUp ? 'Create Account' : 'Sign In')}
-            </Button>
-
-            <div className="text-center">
-              <button
-                onClick={() => {
-                  setIsSignUp(!isSignUp);
-                  setEmail('');
-                  setPassword('');
-                  setDisplayName('');
-                }}
-                className="text-sm text-[#F26B5E] hover:underline font-medium"
-              >
-                {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-              </button>
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-[#6F6F6F]">Or continue with</span>
-            </div>
-          </div>
-
-          {/* Social Sign In Buttons */}
-          <div className="space-y-3">
-            <Button
-              variant="outline"
-              onClick={handleAppleSignIn}
-              disabled={loading}
-              className="w-full rounded-2xl h-12 border-2 border-gray-200 hover:border-[#F26B5E] hover:bg-white"
-            >
-              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
-              </svg>
-              Sign in with Apple
-            </Button>
-
-            <Button
-              variant="outline"
+        {/* Sign In Options */}
+        {!showEmailLogin ? (
+          <div className="w-full space-y-3 pb-4">
+            {/* Google Sign In */}
+            <button
               onClick={handleGoogleSignIn}
               disabled={loading}
-              className="w-full rounded-2xl h-12 border-2 border-gray-200 hover:border-[#F26B5E] hover:bg-white"
+              className="w-full h-14 bg-white border border-white rounded-full shadow-[0px_10px_15px_0px_rgba(0,0,0,0.1),0px_4px_6px_0px_rgba(0,0,0,0.1)] flex items-center justify-center gap-3 hover:shadow-[0px_12px_18px_0px_rgba(0,0,0,0.12),0px_5px_7px_0px_rgba(0,0,0,0.12)] transition-shadow disabled:opacity-50"
             >
-              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none">
+                <path d="M18.17 8.35H9.29v3.34h5.18c-.43 1.22-1.76 2.85-4.35 2.85-2.62 0-4.76-2.17-4.76-4.85s2.14-4.85 4.76-4.85c1.49 0 2.49.64 3.07 1.19l2.63-2.53C14.46 2.18 12.03 1 9.29 1 4.8 1 1.16 4.64 1.16 9.14s3.64 8.14 8.13 8.14c4.69 0 7.81-3.3 7.81-7.94 0-.53-.05-1-.12-1.43z" fill="#4285F4"/>
+                <path d="M2.38 5.8L5.38 8.06c.61-1.82 2.32-3.14 4.37-3.14 1.49 0 2.49.64 3.07 1.19l2.63-2.53C14.1 2.26 11.67 1.08 8.93 1.08c-2.62 0-4.94 1.35-6.26 3.39l-.29.33z" fill="#EA4335"/>
+                <path d="M9.29 17.28c2.67 0 5.04-1.11 6.71-2.92l-3.08-2.61c-.85.58-1.94.94-3.13.94-2.57 0-4.76-1.69-5.55-3.99l-3.04 2.34c1.32 2.62 4.02 4.24 7.09 4.24z" fill="#34A853"/>
+                <path d="M3.92 9.69c-.22-.64-.35-1.33-.35-2.04s.13-1.4.35-2.04L.88 3.27C.31 4.41 0 5.72 0 7.13s.31 2.72.88 3.86l3.04-2.3z" fill="#FBBC05"/>
               </svg>
-              Sign in with Google
-            </Button>
-          </div>
-        </div>
+              <span className="text-[17px] font-semibold text-black tracking-[-0.43px]">
+                Continue with Google
+              </span>
+            </button>
 
-        {/* Feature Highlights */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-              <ListChecks className="w-6 h-6 text-purple-600" />
-            </div>
-            <p className="text-xs text-[#6F6F6F] font-medium">Chore Scheduling</p>
+            {/* Apple Sign In */}
+            <button
+              onClick={handleAppleSignIn}
+              disabled={loading}
+              className="w-full h-14 bg-black border border-black rounded-full flex items-center justify-center gap-3 hover:bg-gray-900 transition-colors disabled:opacity-50"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none">
+                <path d={svgPaths.p2c758c00} fill="#F26B5E" />
+                <path d={svgPaths.p211b2a80} stroke="#F26B5E" strokeLinecap="round" strokeWidth="1.36355" />
+              </svg>
+              <span className="text-[17px] font-semibold text-white tracking-[-0.43px]">
+                Continue with Apple
+              </span>
+            </button>
           </div>
-          <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-              <Calendar className="w-6 h-6 text-green-600" />
-            </div>
-            <p className="text-xs text-[#6F6F6F] font-medium">Meal Planning</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
-            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-              <Sparkles className="w-6 h-6 text-amber-600" />
-            </div>
-            <p className="text-xs text-[#6F6F6F] font-medium">AI-Powered</p>
-          </div>
-        </div>
+        ) : (
+          /* Email Login Form */
+          <form onSubmit={handleEmailSignIn} className="w-full space-y-3 pb-4">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              required
+              className="w-full h-14 bg-white border border-[#E5E7EB] rounded-full px-6 text-[17px] focus:outline-none focus:border-[#F26B5E] transition-colors"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              required
+              className="w-full h-14 bg-white border border-[#E5E7EB] rounded-full px-6 text-[17px] focus:outline-none focus:border-[#F26B5E] transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-14 bg-[#F26B5E] border border-[#F26B5E] rounded-full flex items-center justify-center gap-3 hover:bg-[#E15A4E] transition-colors disabled:opacity-50"
+            >
+              <span className="text-[17px] font-semibold text-white tracking-[-0.43px]">
+                {loading ? 'Signing in...' : 'Sign In'}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowEmailLogin(false)}
+              className="w-full text-center text-sm text-[#9C9C9C] hover:text-[#F26B5E] transition-colors underline pt-2"
+            >
+              Back to social login
+            </button>
+          </form>
+        )}
 
-        {/* Test Mode Link */}
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => {
-              localStorage.setItem('testMode', 'true');
-              navigate('/');
-            }}
-            className="text-sm text-[#9C9C9C] hover:text-[#F26B5E] transition-colors underline"
-          >
-            Continue without login (Test Mode)
-          </button>
-        </div>
+        {/* Email Login Toggle / Test Mode Link */}
+        {!showEmailLogin && (
+          <>
+            <button
+              onClick={() => setShowEmailLogin(true)}
+              className="text-sm text-[#9C9C9C] hover:text-[#F26B5E] transition-colors underline pb-2"
+            >
+              Sign in with Email & Password
+            </button>
+            <button
+              onClick={() => {
+                localStorage.setItem('testMode', 'true');
+                navigate('/');
+              }}
+              className="text-sm text-[#9C9C9C] hover:text-[#F26B5E] transition-colors underline pb-4"
+            >
+              Continue without login (Test Mode)
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

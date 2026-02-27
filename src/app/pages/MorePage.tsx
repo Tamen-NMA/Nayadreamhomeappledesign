@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { ShoppingBag, Users, CreditCard, Settings, ChevronRight } from 'lucide-react';
+import { ShoppingBag, Users, CreditCard, Settings, ChevronRight, Wrench } from 'lucide-react';
 
 export default function MorePage() {
   const navigate = useNavigate();
@@ -9,6 +9,7 @@ export default function MorePage() {
     { icon: Users, label: 'Household', path: '/household', color: 'bg-blue-100 text-blue-600' },
     { icon: CreditCard, label: 'Billing', path: '/billing', color: 'bg-purple-100 text-purple-600' },
     { icon: Settings, label: 'Settings', path: '/settings', color: 'bg-gray-100 text-gray-600' },
+    { icon: Wrench, label: 'Maintenance Page', path: '/maintenance', color: 'bg-orange-100 text-orange-600' },
   ];
 
   return (

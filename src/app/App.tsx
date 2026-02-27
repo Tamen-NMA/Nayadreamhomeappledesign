@@ -2,6 +2,7 @@ import { RouterProvider } from 'react-router';
 import { router } from './routes';
 import { Toaster } from './components/ui/sonner';
 
+// Main App component - Entry point for Naya Dream Home
 export default function App() {
   return (
     <>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Plus, Utensils, Sparkles, Calendar } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
@@ -10,21 +10,53 @@ import { MOCK_MEAL_PLANS, getMealEmoji } from '../data/mock-kenya';
 
 export default function MealsListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const showList = searchParams.get('list') === 'true';
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+  const [redirectId, setRedirectId] = useState<string | null>(null);
 
   useEffect(() => {
     loadMealPlans();
-  }, []);
+  }, [showList]);
+
+  // Separate effect for redirect to avoid hooks ordering issues
+  useEffect(() => {
+    if (shouldRedirect && redirectId) {
+      navigate(`/meals/${redirectId}`, { replace: true });
+    }
+  }, [shouldRedirect, redirectId, navigate]);
 
   async function loadMealPlans() {
+    setLoading(true);
+    setShouldRedirect(false);
+    setRedirectId(null);
+    
     try {
       const data = await api.getMealPlans();
       // Use mock data as fallback if server returns empty
-      setMealPlans(data && data.length > 0 ? data : MOCK_MEAL_PLANS);
+      const allPlans = data && data.length > 0 ? data : MOCK_MEAL_PLANS;
+      setMealPlans(allPlans);
+      
+      // Auto-redirect to active meal plan if not showing list
+      if (!showList && allPlans.length > 0) {
+        const activePlan = allPlans.find(p => p.status === 'active') || allPlans[0];
+        setRedirectId(activePlan.id);
+        setShouldRedirect(true);
+        return;
+      }
     } catch (error) {
       console.error('Failed to load meal plans, using mock data:', error);
       setMealPlans(MOCK_MEAL_PLANS);
+      
+      // Auto-redirect to mock meal plan if not showing list
+      if (!showList && MOCK_MEAL_PLANS.length > 0) {
+        const activePlan = MOCK_MEAL_PLANS.find(p => p.status === 'active') || MOCK_MEAL_PLANS[0];
+        setRedirectId(activePlan.id);
+        setShouldRedirect(true);
+        return;
+      }
     } finally {
       setLoading(false);
     }

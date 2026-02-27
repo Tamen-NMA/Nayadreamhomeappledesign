@@ -13,8 +13,10 @@ import HouseholdPage from './pages/HouseholdPage';
 import BillingPage from './pages/BillingPage';
 import SettingsPage from './pages/SettingsPage';
 import SharedTasksPage from './pages/SharedTasksPage';
+import MaintenancePage from './pages/MaintenancePage';
 import NotFound from './pages/NotFound';
 
+// Router configuration for Naya Dream Home app
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -36,6 +38,10 @@ export const router = createBrowserRouter([
   {
     path: '/signin',
     Component: SignIn,
+  },
+  {
+    path: '/maintenance',
+    Component: MaintenancePage,
   },
   {
     path: '/my-tasks/:token',

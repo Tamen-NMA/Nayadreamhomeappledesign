@@ -108,6 +108,35 @@ export const api = {
     });
   },
 
+  async uploadAvatar(file: File) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    const API_BASE = getAPIBase();
+    const token = await getAccessToken();
+    
+    if (!token) {
+      throw new Error('No valid session. Please sign in again.');
+    }
+
+    const response = await fetch(`${API_BASE}/user/avatar`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'apikey': publicAnonKey,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to upload avatar: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.avatarUrl;
+  },
+
   // Household Members (authenticated)
   async getMembers() {
     return apiCall<HouseholdMember[]>('/members', { requiresAuth: true });
